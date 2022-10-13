@@ -1,8 +1,8 @@
 (library
  (name ocaml_pv_lib)
  (public_name OCaml-PV.Lib)
- (modules Ast Interpret Parser Printast Pprintast utils Tests)
- (modules_without_implementation ast)
+ (modules Ast Interpret Parser Printast Pprintast Utils Tests)
+ (modules_without_implementation Ast)
  (libraries base angstrom)
  (preprocess
   (pps ppx_expect ppx_deriving.show))
