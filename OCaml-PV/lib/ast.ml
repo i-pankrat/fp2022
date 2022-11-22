@@ -2,9 +2,7 @@
 
 (** SPDX-License-Identifier: LGPL-3.0-or-later *)
 
-type id = string
-
-(** TODO: AST *)
+type id = string [@@deriving show { with_path = false }]
 
 type const =
   | CInt of int
@@ -12,6 +10,7 @@ type const =
   | CNil
   | CString of string
   | CUnit
+[@@deriving show { with_path = false }]
 
 and bin_op =
   | Plus
@@ -27,16 +26,14 @@ and bin_op =
   | Lt
   | Gtq
   | Ltq
+[@@deriving show { with_path = false }]
 
 and pattern =
   | PConst of const
   | PVar of id
-(* Pattern for lists, tuples ??? *)
-
-(* We need onaly one arugents in functions, because we carrying
-    For example: let sum x y = x + y
-    Will translate to Let(sum, Var(x), Let("Carry", Var(y), Plus(Var(x), Var(y))))
-       *)
+  | PTuple of pattern list
+  | PCons of pattern * pattern (* head and tail *)
+[@@deriving show { with_path = false }]
 
 and expr =
   | EIfThenElse of expr * expr * expr
@@ -47,4 +44,4 @@ and expr =
   | EVar of id
   | EFun of id * expr
   | EApply of expr * expr
-(* Add "::" for Lists; add tuples *)
+[@@deriving show { with_path = false }]
