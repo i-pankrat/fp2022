@@ -2,54 +2,11 @@
 
 (** SPDX-License-Identifier: LGPL-3.0-or-later *)
 
-(* TODO: implement parser here *)
-
 open Angstrom
 open Ast
 open Base
 
-(* Exlanation of parser combinators
-
-  <|> - choise operator
-
-  АБСТРАГИРОВАННОЕ ПОНЯТИЕ ПОСЛЕДОВАТЕЛЬНОГО ИСПОЛНЕНИЯ
-  let* same as p >>= f - bind. Применяем один парсер p, 
-  если он отработает, то запускаем функцию f, которая в зависимости от результата
-  возвращает парсер, который мы применяем к результату p 
-  если нет, то возвращаем ошибку, не применяя функцию f. В зависимости от 
-  того, что мы напарсили в p, мы принимаем решение, как мы будем парсить дальше 
-
-  SPEAK ABOUT BIND: это всегда работа в некотормо контексте
-
-
-  p >>| f, если парсер на исходной строке отработает успешно, то
-  вернёт результат f(x), то есть применит функцию к результату парсера
-
-  АБСТРАГИРОВАННОЕ ПОНЯТИЕ ПРИМЕНЕНИЯ ФУНКЦИИ В КОНТЕКСТЕ
-  Любая монада является апликативом
-  f <*> p - apply - тоже самое, что  f >>= fun f -> p >>| f, то есть ??
-  Приминение функции f:(a -> b)t к значению типа альфа, и получение значения
-  резульатта типа b, когда всё это погружено в контекст указанонго типа t.
-
-  f <$> p is equivalent to p >>| f, то есть это просто запись на оборот,
-  тут мы применяем парсер p к строке, а затем, если парсер отработал успешно,
-  то применяем функцию f, к результату парсера
-
-  p1 *> p2, отбрасывает то, что напарсил p1, и передаёт нераспаршенную часть в p2
-  p1 <* p2,  тоже самое, только в обратную сторону: запускаем p1, отбрасываем результат p2
-
-  lift2 f p1 p2 = f <$> p1 <*> p2 - применяем один из парсеров p1, если p1
-  не срабатывает, то p2, а затем к результату p1 или p2 применяем функцию f
-
-  ^ - string concatenation
-
-*)
-
-(*  actions to be done to test functions in REPL (utop) 
-    if there is no Ast module, just
-    1. dune utop . 
-    2. #require "OCaml-PV.Lib";; 
-    3. #use "parser.ml";; *)
+let parse p s = parse_string ~consume:All p s
 
 let is_empty = function
   | ' ' | '\t' | '\n' | '\r' -> true
@@ -61,12 +18,19 @@ let is_digit = function
   | _ -> false
 ;;
 
-let is_letter = function
-  | 'a' .. 'z' | 'A' .. 'Z' -> true
+let is_lletter = function
+  | 'a' .. 'z' -> true
   | _ -> false
 ;;
 
-let is_valid_symbol = function
+let is_uletter = function
+  | 'A' .. 'Z' -> true
+  | _ -> false
+;;
+
+let is_letter ch = is_lletter ch || is_uletter ch
+
+let is_ident_symbol = function
   | '_' -> true
   | c -> is_letter c
 ;;
@@ -79,42 +43,85 @@ let is_kw = function
 let empty = take_while is_empty
 let empty1 = take_while1 is_empty
 let token s = empty *> s
-let between l r p = l *> p <* r
+let trim s = empty *> s <* empty
+let pstoken s = empty *> string s
+let pparens p = pstoken "(" *> p <* pstoken ")"
+let pquotes p = pstoken "\"" *> p <* pstoken "\""
+let pbrackets p = pstoken "[" *> p <* pstoken "]"
 
-(* constructors *)
+(* Const constructors *)
+let cint x = CInt x
+let cbool x = CBool x
+let cstring x = CString x
+let cnill = CNil
 
-(* Try to parse constants*)
-
-let pCInt =
-  token @@ take_while is_digit
-  >>= (fun res -> return @@ Int.of_string res)
-  >>= fun res -> return @@ CInt res
+(* Const parsers *)
+let psign =
+  choice [ pstoken "+" *> return 1; pstoken "-" *> return (-1); pstoken "" *> return 1 ]
 ;;
 
-let pCBool =
-  token @@ string "true"
-  <|> token @@ string "false"
-  >>= (fun res -> return @@ Bool.of_string res)
-  >>= fun res -> return @@ CBool res
+let pcint =
+  lift2 (fun s v -> cint (s * Int.of_string v)) psign (token @@ take_while1 is_digit)
 ;;
 
-(* example "str" -> CString str*)
-let pCString =
-  token @@ (string "\"" *> take_while (fun x -> x != '"'))
-  <* token @@ string "\""
-  >>= fun res -> return @@ CString res
+let pcbool = return Bool.of_string <*> (pstoken "true" <|> pstoken "false") >>| cbool
+let pcstring = cstring <$> pquotes @@ take_while (fun x -> x != '"')
+let pcnil = pstoken "[]" *> return CNil
+let pcunit = pstoken "()" *> return CUnit
+let pconst = pcint <|> pcbool <|> pcstring <|> pcnil <|> pcunit
+
+(* Parse ident *)
+
+let pIdent =
+  empty *> take_while is_ident_symbol
+  >>= fun res -> if is_kw res then fail "keyword" else return res
 ;;
 
-let pNil =
-  token @@ (string "[" *> skip_while (fun x -> x != ']'))
-  <* token @@ string "]"
-  >>= fun () -> return @@ CNil
+(* pattern constructors *)
+let construct_ptuple t = PTuple t
+let construct_pconst c = PConst c
+let construct_pcons h t = PCons (h, t)
+(* Parse patterns *)
+
+let ppconst = pconst >>| fun x -> PConst x
+let ppvar = pIdent >>| fun x -> PVar x
+let pptuple t = pparens @@ sep_by (pstoken ",") t
+let pplist t = pbrackets @@ sep_by (pstoken ";") t
+
+type pdispatch =
+  { cons : pdispatch -> pattern t
+  ; tuple : pdispatch -> pattern t
+  ; pattern : pdispatch -> pattern t
+  }
+
+(* TODO: support tuples as a, b not only (a, b) *)
+let pack =
+  let rec create_cons len = function
+    | [] -> PConst CNil
+    | [ a ] -> if len = 0 then a else construct_pcons a (PConst CNil)
+    | hd :: tl -> construct_pcons hd (create_cons (len + 1) tl)
+  in
+  let pattern pack =
+    fix
+    @@ fun _ ->
+    create_cons 0
+    <$> sep_by (pstoken "::")
+        @@ choice [ pack.tuple pack; pack.cons pack; ppconst; ppvar ]
+  in
+  let tuple pack =
+    fix
+    @@ fun _ -> construct_ptuple <$> pparens @@ sep_by1 (pstoken ",") (pack.pattern pack)
+  in
+  let rec create_cons = function
+    | [] -> PConst CNil
+    | hd :: tl -> construct_pcons hd (create_cons tl)
+  in
+  let cons pack =
+    fix @@ fun _ -> create_cons <$> pbrackets @@ sep_by1 (pstoken ";") (pack.pattern pack)
+  in
+  { cons; tuple; pattern }
 ;;
 
-let pUnit =
-  token @@ (string "(" *> skip_while (fun x -> x != ')'))
-  <* token @@ string ")"
-  >>= fun () -> return @@ CUnit
-;;
+let ppattern = pack.pattern pack
 
-let pConst = pCBool <|> pCString <|> pNil <|> pUnit
+(* parse expr *)
