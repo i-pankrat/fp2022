@@ -125,3 +125,92 @@ let pack =
 let ppattern = pack.pattern pack
 
 (* parse expr *)
+
+(* PARSER TESTS*)
+let interprete_parse_result fm p str =
+  match parse p str with
+  | Result.Error e -> e
+  | Result.Ok ast -> fm ast
+;;
+
+(* Parse const tests *)
+let%expect_test _ =
+  print_string (interprete_parse_result show_const pconst "42");
+  [%expect {| (CInt 42) |}]
+;;
+
+let%expect_test _ =
+  print_string (interprete_parse_result show_const pconst " -42");
+  [%expect {| (CInt -42) |}]
+;;
+
+let%expect_test _ =
+  print_string (interprete_parse_result show_const pconst "false");
+  [%expect {| (CBool false) |}]
+;;
+
+let%expect_test _ =
+  print_string (interprete_parse_result show_const pconst "true");
+  [%expect {| (CBool true) |}]
+;;
+
+let%expect_test _ =
+  print_string (interprete_parse_result show_const pconst "\"Ocaml is cool!\"");
+  [%expect {| (CString "Ocaml is cool!") |}]
+;;
+
+let%expect_test _ =
+  print_string (interprete_parse_result show_const pconst "[]");
+  [%expect {| CNil |}]
+;;
+
+let%expect_test _ =
+  print_string (interprete_parse_result show_const pconst " ()");
+  [%expect {| CUnit |}]
+;;
+
+(* Parse patterns tests *)
+
+let%expect_test _ =
+  print_string (interprete_parse_result show_pattern ppconst "4");
+  [%expect {| (PConst (CInt 4)) |}]
+;;
+
+let%expect_test _ =
+  print_string (interprete_parse_result show_pattern ppattern "a");
+  [%expect {| (PVar "a") |}]
+;;
+
+let%expect_test _ =
+  print_string (interprete_parse_result show_pattern ppattern "a :: b :: c");
+  [%expect
+    {|
+    (PCons ((PVar "a"), (PCons ((PVar "b"), (PCons ((PVar "c"), (PConst CNil)))))
+       )) |}]
+;;
+
+let%expect_test _ =
+  print_string (interprete_parse_result show_pattern ppattern "(a, b) :: (c, d)");
+  [%expect
+    {|
+    (PCons ((PTuple [(PVar "a"); (PVar "b")]),
+       (PCons ((PTuple [(PVar "c"); (PVar "d")]), (PConst CNil))))) |}]
+;;
+
+let%expect_test _ =
+  print_string (interprete_parse_result show_pattern ppattern "[a; b; c;]");
+  [%expect
+    {|
+    (PCons ((PVar "a"),
+       (PCons ((PVar "b"),
+          (PCons ((PVar "c"), (PCons ((PVar ""), (PConst CNil)))))))
+       )) |}]
+;;
+
+let%expect_test _ =
+  print_string (interprete_parse_result show_pattern ppattern "((a, b), (c, d))");
+  [%expect
+    {|
+    (PTuple
+       [(PTuple [(PVar "a"); (PVar "b")]); (PTuple [(PVar "c"); (PVar "d")])]) |}]
+;;
