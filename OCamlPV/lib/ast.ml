@@ -43,7 +43,7 @@ and expr =
   | ELet of id * expr * expr
   | ELetRec of id * expr * expr
   | EMatch of expr * (expr * expr) list
-  | EBinOp of bin_op * expr * expr
+  | EBinOp of bin_op
   | EVar of id
   | EPatterns of pattern
   | EFun of expr * expr
