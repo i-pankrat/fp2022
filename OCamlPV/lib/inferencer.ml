@@ -16,28 +16,17 @@ type error =
   | `Empty_Pattern
   ]
 
-let rec pp_typ ppf =
-  let open Format in
-  function
-  | Ty_var n -> fprintf ppf "'_%d" n
-  | Prim s -> pp_print_string ppf s
-  | Arrow (l, r) -> fprintf ppf "(%a -> %a)" pp_typ l pp_typ r
-  | List t -> fprintf ppf "%a list" pp_typ t
-  | Tuple ts ->
-    fprintf
-      ppf
-      "(%a)"
-      (pp_print_list
-         ~pp_sep:(fun ppf () -> fprintf ppf " * ")
-         (fun ppf ty -> fprintf ppf "%a" pp_typ ty))
-      ts
-;;
-
 let pp_error ppf : error -> _ = function
   | `Occurs_check -> Format.fprintf ppf "Occurs check failed"
   | `No_variable s -> Format.fprintf ppf "Undefined variable '%s'" s
   | `Unification_failed (l, r) ->
-    Format.fprintf ppf "unification failed on %a and %a" pp_typ l pp_typ r
+    Format.fprintf
+      ppf
+      "unification failed on %a and %a"
+      Pprintast.pp_typ
+      l
+      Pprintast.pp_typ
+      r
   | `Empty_Pattern -> Format.fprintf ppf "Empty pattern"
 ;;
 
@@ -148,7 +137,7 @@ end = struct
   let pp ppf subst =
     let open Format in
     Map.Poly.iteri subst ~f:(fun ~key ~data ->
-      fprintf ppf "'_%d -> %a@\n" key pp_typ data)
+      fprintf ppf "'_%d -> %a@\n" key Pprintast.pp_typ data)
   ;;
 
   let empty = Map.Poly.empty
@@ -496,7 +485,7 @@ let%expect_test _ =
 
 let run_infer = function
   | Result.Error _ -> Format.printf "Error%!"
-  | Result.Ok typed -> Format.printf "%a%!" pp_typ typed
+  | Result.Ok typed -> Format.printf "%a%!" Pprintast.pp_typ typed
 ;;
 
 let%expect_test _ =
