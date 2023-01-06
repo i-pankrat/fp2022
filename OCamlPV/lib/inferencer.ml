@@ -189,12 +189,12 @@ end = struct
     | Tuple a, b | b, Tuple a -> failwith "TODO: unify tuple"
     | _ -> fail (`Unification_failed (l, r))
 
-  and extend key value extensible_map =
-    match Map.Poly.find extensible_map key with
+  and extend key value extensible_subst =
+    match Map.Poly.find extensible_subst key with
     | None ->
-      let v = apply extensible_map value in
+      let v = apply extensible_subst value in
       let* s2 = singleton key v in
-      fold_left extensible_map ~init:(return s2) ~f:(fun key value acc ->
+      fold_left extensible_subst ~init:(return s2) ~f:(fun key value acc ->
         let v = apply s2 value in
         let* mapk, mapv = mapping key v in
         match Map.Poly.add acc ~key:mapk ~data:mapv with
@@ -202,7 +202,7 @@ end = struct
         | `Duplicate -> return acc)
     | Some v2 ->
       let* s2 = unify value v2 in
-      compose extensible_map s2
+      compose extensible_subst s2
 
   and compose s1 s2 = fold_left s2 ~init:(return s1) ~f:extend
 
@@ -238,11 +238,11 @@ module Scheme = struct
   type t = scheme
 
   let occurs_in v = function
-    | S (xs, t) -> (not (VarSet.mem v xs)) && Type.occurs_in v t
+    | S (names, ty) -> (not (VarSet.mem v names)) && Type.occurs_in v ty
   ;;
 
   let free_vars = function
-    | S (bs, t) -> VarSet.diff (Type.free_vars t) bs
+    | S (names, ty) -> VarSet.diff (Type.free_vars ty) names
   ;;
 
   let apply sub (S (names, ty)) =
@@ -260,11 +260,11 @@ module TypeEnv = struct
   let empty = []
 
   let free_vars : t -> VarSet.t =
-    List.fold_left ~init:VarSet.empty ~f:(fun acc (_, s) ->
-      VarSet.union acc (Scheme.free_vars s))
+    List.fold_left ~init:VarSet.empty ~f:(fun acc (_, scheme) ->
+      VarSet.union acc (Scheme.free_vars scheme))
   ;;
 
-  let apply s env = List.Assoc.map env ~f:(Scheme.apply s)
+  let apply subst env = List.Assoc.map env ~f:(Scheme.apply subst)
 
   let pp ppf xs =
     Caml.Format.fprintf ppf "{| ";
@@ -282,14 +282,14 @@ let unify = Subst.unify
 let fresh_var = fresh >>| fun n -> Ty_var n
 
 let instantiate : scheme -> ty R.t =
- fun (S (bs, t)) ->
+ fun (S (names, ty)) ->
   VarSet.fold_left_m
     (fun typ name ->
       let* f1 = fresh_var in
       let* s = Subst.singleton name f1 in
       return (Subst.apply s typ))
-    bs
-    (return t)
+    names
+    (return ty)
 ;;
 
 let generalize : TypeEnv.t -> Type.t -> Scheme.t =
