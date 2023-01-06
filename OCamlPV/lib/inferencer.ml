@@ -387,29 +387,34 @@ let run_subst subst =
 let%expect_test _ =
   let _ = unify (v 1 @-> v 1) (int_typ @-> v 2) |> run_subst in
   [%expect {|
-    1 -> (Prim "int")
-    2 -> (Prim "int") |}]
+    '_1 -> int
+    '_2 -> int |}]
 ;;
 
 let%expect_test _ =
   let _ = unify (v 1 @-> v 1) ((v 2 @-> int_typ) @-> int_typ @-> int_typ) |> run_subst in
   [%expect {|
-    1 -> (Arrow ((Prim "int"), (Prim "int")))
-    2 -> (Prim "int") |}]
+    '_1 -> (int -> int)
+    '_2 -> int |}]
 ;;
 
 let%expect_test _ =
   let _ = unify (v 1 @-> v 2) (v 2 @-> v 3) |> run_subst in
   [%expect {|
-    1 -> (Ty_var 3)
-    2 -> (Ty_var 3) |}]
+    '_1 -> '_3
+    '_2 -> '_3 |}]
+;;
+
+let%expect_test _ =
+  let _ = unify (v 1 @-> bool_typ) (v 2 @-> int_typ) |> run_subst in
+  [%expect {| Error |}]
 ;;
 
 (* Infer tests *)
 
 let run_infer = function
   | Result.Error _ -> Format.printf "Error%!"
-  | Result.Ok typed -> Format.print_string (show_ty typed)
+  | Result.Ok typed -> Format.printf "%a%!" pp_typ typed
 ;;
 
 let%expect_test _ =
@@ -418,7 +423,7 @@ let%expect_test _ =
     let e = EConst (CInt 4) in
     w e |> run_infer
   in
-  [%expect {| (Prim "int") |}]
+  [%expect {| int |}]
 ;;
 
 let%expect_test _ =
@@ -427,7 +432,7 @@ let%expect_test _ =
     let e = EConst (CBool true) in
     w e |> run_infer
   in
-  [%expect {| (Prim "bool") |}]
+  [%expect {| bool |}]
 ;;
 
 let%expect_test _ =
@@ -436,7 +441,7 @@ let%expect_test _ =
     let e = EIfThenElse (EConst (CBool true), EConst (CInt 4), EConst (CInt 5)) in
     w e |> run_infer
   in
-  [%expect {| (Prim "int") |}]
+  [%expect {| int |}]
 ;;
 
 let%expect_test _ =
@@ -445,7 +450,7 @@ let%expect_test _ =
     let e = EApply (EApply (EBinOp Plus, EConst (CInt 4)), EConst (CInt 4)) in
     w e |> run_infer
   in
-  [%expect {| (Prim "int") |}]
+  [%expect {| int |}]
 ;;
 
 let%expect_test _ =
