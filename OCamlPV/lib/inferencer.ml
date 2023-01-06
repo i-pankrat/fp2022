@@ -1,28 +1,6 @@
 open Base
+open Typedtree
 
-type binder = int [@@deriving show { with_path = false }]
-
-module VarSetInit = struct
-  include Caml.Set.Make (Int)
-
-  let pp ppf s =
-    Format.fprintf ppf "[ ";
-    iter (Format.fprintf ppf "%d; ") s;
-    Format.fprintf ppf "]"
-  ;;
-end
-
-type ty =
-  | Prim of string
-  | Ty_var of binder
-  | Arrow of ty * ty
-[@@deriving show { with_path = false }]
-
-let arrow l r = Arrow (l, r)
-let int_typ = Prim "int"
-let bool_typ = Prim "bool"
-let v x = Ty_var x
-let ( @-> ) = arrow
 let use_logging = false
 
 let log fmt =
