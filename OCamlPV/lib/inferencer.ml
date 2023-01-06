@@ -13,6 +13,7 @@ type error =
   [ `Occurs_check
   | `No_variable of string
   | `Unification_failed of ty * ty
+  | `Empty_Pattern
   ]
 
 let rec pp_typ ppf =
@@ -37,6 +38,7 @@ let pp_error ppf : error -> _ = function
   | `No_variable s -> Format.fprintf ppf "Undefined variable '%s'" s
   | `Unification_failed (l, r) ->
     Format.fprintf ppf "unification failed on %a and %a" pp_typ l pp_typ r
+  | `Empty_Pattern -> Format.fprintf ppf "Empty pattern"
 ;;
 
 module R : sig
@@ -394,23 +396,61 @@ let infer =
       let* s5 = unify t2 t3 in
       let* final_subst = Subst.compose_all [ s5; s4; s3; s2; s1 ] in
       return (final_subst, Subst.apply s5 t2)
-    | ELet (name, e1, e2) ->
-      (match e1 with
-       | EVar x ->
-         let* tv = fresh_var in
-         let env2 = TypeEnv.extend env (x, S (VarSet.empty, tv)) in
-         let* s, ty = helper env2 e2 in
-         let typedres = Arrow (Subst.apply s tv, ty) in
-         return (s, typedres)
-       | _ as e1 ->
-         let* s1, t1 = helper env e1 in
-         let env2 = TypeEnv.apply s1 env in
-         let t1 = generalize env2 t1 in
-         let* s2, t3 = helper (TypeEnv.extend env2 (name, t1)) e2 in
-         let* final_subst = Subst.compose s1 s2 in
-         return (final_subst, t3))
-    | EVar x -> lookup_env x env
-    | _ -> failwith "TODO"
+    | ELet (name, e) ->
+      let* s, t = helper env e in
+      let env = TypeEnv.apply s env in
+      return (s, t)
+    | ELetIn (name, e1, e2) ->
+      let* s1, t1 = helper env e1 in
+      let env2 = TypeEnv.apply s1 env in
+      let t1 = generalize env2 t1 in
+      let* s2, t3 = helper (TypeEnv.extend env2 (name, t1)) e2 in
+      let* final_subst = Subst.compose s1 s2 in
+      return (final_subst, t3)
+    | ELetRec (name, e) ->
+      let* tv = fresh_var in
+      let env = TypeEnv.extend env (name, S (VarSet.empty, tv)) in
+      let* s, t = helper env e in
+      return (s, t)
+    | ELetRecIn (name, e1, e2) ->
+      let* tv = fresh_var in
+      let env = TypeEnv.extend env (name, S (VarSet.empty, tv)) in
+      let* s1, t1 = helper env e1 in
+      let* s2 = unify (Subst.apply s1 tv) t1 in
+      let* s = Subst.compose s1 s2 in
+      let env = TypeEnv.apply s env in
+      let t2 = generalize env (Subst.apply s tv) in
+      let* s2, t2 = helper TypeEnv.(extend (apply s env) (name, t2)) e2 in
+      let* final_subst = Subst.compose s s2 in
+      return (final_subst, t2)
+    | EFun (arg, e) ->
+      let* env, t1 = pattern_helper env arg in
+      let* s, t2 = helper env e in
+      let typedres = Arrow (Subst.apply s t1, t2) in
+      return (s, typedres)
+    | EMatch (cond, matches) ->
+      let* cond_sub, cond_ty = helper env cond in
+      let env = TypeEnv.apply cond_sub env in
+      let rec (matches_helper : (pattern * expr) list -> (Subst.t * ty) R.t) = function
+        | [] -> fail `Empty_Pattern
+        | hd :: [] ->
+          (match hd with
+           | pat, expr ->
+             let* pat_env, pat_ty = pattern_helper env pat in
+             let* s1 = unify cond_ty pat_ty in
+             let* s2, expr_ty = helper (TypeEnv.apply s1 pat_env) expr in
+             let* finalsub = Subst.compose s1 s2 in
+             return (finalsub, Subst.apply finalsub expr_ty))
+        | hd :: tl ->
+          let* s1, ty1 = matches_helper [ hd ] in
+          let* s2, ty2 = matches_helper tl in
+          let* s3 = unify ty1 ty2 in
+          let* finalsubst = Subst.compose_all [ s1; s2; s3 ] in
+          return (finalsubst, Subst.apply s3 ty1)
+      in
+      let* match_sub, match_ty = matches_helper matches in
+      let* finalmatchsub = Subst.compose cond_sub match_sub in
+      return (finalmatchsub, Subst.apply finalmatchsub match_ty)
   in
   helper
 ;;
