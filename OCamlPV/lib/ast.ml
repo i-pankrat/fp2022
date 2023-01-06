@@ -40,12 +40,13 @@ and pattern =
 and expr =
   | EConst of const
   | EIfThenElse of expr * expr * expr
-  | ELet of id * expr * expr
-  | ELetRec of id * expr * expr
-  | EMatch of expr * (expr * expr) list
+  | ELet of id * expr
+  | ELetIn of id * expr * expr
+  | ELetRec of id * expr
+  | ELetRecIn of id * expr * expr
+  | EMatch of expr * (pattern * expr) list
   | EBinOp of bin_op
   | EVar of id
-  | EPatterns of pattern
-  | EFun of expr * expr
+  | EFun of pattern * expr
   | EApply of expr * expr
 [@@deriving show { with_path = false }]
