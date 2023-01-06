@@ -15,10 +15,21 @@ type error =
   | `Unification_failed of ty * ty
   ]
 
-let rec pp_typ ppf = function
-  | Ty_var n -> Format.fprintf ppf "'_%d" n
-  | Prim s -> Format.pp_print_string ppf s
-  | Arrow (l, r) -> Format.fprintf ppf "(%a -> %a)" pp_typ l pp_typ r
+let rec pp_typ ppf =
+  let open Format in
+  function
+  | Ty_var n -> fprintf ppf "'_%d" n
+  | Prim s -> pp_print_string ppf s
+  | Arrow (l, r) -> fprintf ppf "(%a -> %a)" pp_typ l pp_typ r
+  | List t -> fprintf ppf "%a list" pp_typ t
+  | Tuple ts ->
+    fprintf
+      ppf
+      "(%a)"
+      (pp_print_list
+         ~pp_sep:(fun ppf () -> fprintf ppf " * ")
+         (fun ppf ty -> fprintf ppf "%a" pp_typ ty))
+      ts
 ;;
 
 let pp_error ppf : error -> _ = function
@@ -129,8 +140,9 @@ end = struct
   type t = (fresh, ty) Map.Poly.t
 
   let pp ppf subst =
+    let open Format in
     Map.Poly.iteri subst ~f:(fun ~key ~data ->
-      Format.fprintf ppf "%d -> %s@\n" key (show_ty data))
+      fprintf ppf "'_%d -> %a@\n" key pp_typ data)
   ;;
 
   let empty = Map.Poly.empty
