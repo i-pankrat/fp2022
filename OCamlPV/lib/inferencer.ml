@@ -315,6 +315,46 @@ let pp_env subst ppf env =
 
 let infer =
   let open Ast in
+  let rec (pattern_helper : TypeEnv.t -> Ast.pattern -> (TypeEnv.t * ty) R.t) =
+   fun env -> function
+    | PConst const ->
+      (match const with
+       | CBool _ -> return (env, Prim "bool")
+       | CInt _ -> return (env, Prim "int")
+       | CString _ -> return (env, Prim "string")
+       | CUnit -> return (env, Prim "unit")
+       | CNil ->
+         let* tv = fresh_var in
+         return (env, List tv))
+    | PVar id ->
+      let* tv = fresh_var in
+      let env = TypeEnv.extend env (id, S (VarSet.empty, tv)) in
+      return (env, tv)
+    | PTuple tuple ->
+      let rec tuple_helper envpat =
+        let* env, patterns = envpat in
+        match patterns with
+        | [] -> return (env, [])
+        | hd :: tl ->
+          let* envhd, tyhd = pattern_helper env hd in
+          let new_envpat = return (envhd, tl) in
+          let* envtl, tytl = tuple_helper new_envpat in
+          return (envtl, tyhd :: tytl)
+      in
+      let initvalue = return (env, tuple) in
+      let* finenv, fintys = tuple_helper initvalue in
+      return (finenv, Tuple fintys)
+    | PCons (head, tail) ->
+      let* env, ty1 = pattern_helper env head in
+      let ty1 = List ty1 in
+      let* env, ty2 = pattern_helper env tail in
+      let* subst = unify ty1 ty2 in
+      let finenv = TypeEnv.apply subst env in
+      return (finenv, Subst.apply subst ty1)
+    | PWild ->
+      let* ty = fresh_var in
+      return (env, ty)
+  in
   let rec (helper : TypeEnv.t -> Ast.expr -> (Subst.t * ty) R.t) =
    fun env -> function
     | EConst const ->
