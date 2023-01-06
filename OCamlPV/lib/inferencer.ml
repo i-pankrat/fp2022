@@ -541,22 +541,51 @@ let%expect_test _ =
     let e = EApply (EApply (EBinOp And, EConst (CBool true)), EConst (CBool false)) in
     w e |> run_infer
   in
-  [%expect {| (Prim "bool") |}]
+  [%expect {| bool |}]
 ;;
 
-(* let  x = 5 * 5 in 2 * x *)
 let%expect_test _ =
   let open Ast in
   let _ =
     let e =
-      ELet
+      (* fun x -> x + 1 *)
+      EFun (PVar "x", EApply (EApply (EBinOp Mult, EVar "x"), EVar "x"))
+    in
+    w e |> run_infer
+  in
+  [%expect {| (int -> int) |}]
+;;
+
+let%expect_test _ =
+  let open Ast in
+  let _ =
+    let e =
+      (* fun [a, b] -> a + b *)
+      EFun
+        ( PCons (PVar "a", PCons (PVar "b", PConst CNil))
+        , EApply (EApply (EBinOp Mult, EVar "a"), EVar "b") )
+    in
+    w e |> run_infer
+  in
+  [%expect {| (int list -> int) |}]
+;;
+;;
+
+let x = 5 * 5 in
+2 * x
+
+let%expect_test _ =
+  let open Ast in
+  let _ =
+    let e =
+      ELetIn
         ( "x"
         , EApply (EApply (EBinOp Mult, EConst (CInt 5)), EConst (CInt 5))
         , EApply (EApply (EBinOp Mult, EConst (CInt 2)), EVar "x") )
     in
     w e |> run_infer
   in
-  [%expect {| (Prim "int") |}]
+  [%expect {| int |}]
 ;;
 
 let%expect_test _ =
@@ -564,24 +593,136 @@ let%expect_test _ =
   let _ =
     let e =
       (* let inc x = x + 1 *)
-      ELet ("inc", EVar "x", EApply (EApply (EBinOp Plus, EVar "x"), EConst (CInt 1)))
+      ELet
+        ("inc", EFun (PVar "x", EApply (EApply (EBinOp Plus, EVar "x"), EConst (CInt 1))))
     in
     w e |> run_infer
   in
-  [%expect {| (Arrow ((Prim "int"), (Prim "int"))) |}]
+  [%expect {| (int -> int) |}]
 ;;
 
 let%expect_test _ =
   let open Ast in
   let _ =
     let e =
-      (* let funny x = x = "some_str" *)
-      ELet
-        ( "funny"
-        , EVar "x"
-        , EApply (EApply (EBinOp Eq, EVar "x"), EConst (CString "some_str")) )
+      (* let rec fac n = if n > 0 then n * fac (n - 1) else 1 *)
+      ELetRec
+        ( "fac"
+        , EFun
+            ( PVar "n"
+            , EIfThenElse
+                ( EApply (EApply (EBinOp Gt, EVar "n"), EConst (CInt 0))
+                , EApply
+                    ( EApply (EBinOp Mult, EVar "n")
+                    , EApply
+                        ( EVar "fac"
+                        , EApply (EApply (EBinOp Minus, EVar "n"), EConst (CInt 1)) ) )
+                , EConst (CInt 1) ) ) )
     in
     w e |> run_infer
   in
-  [%expect {| (Arrow ((Prim "string"), (Prim "bool"))) |}]
+  [%expect {| (int -> int) |}]
+;;
+
+let%expect_test _ =
+  let open Ast in
+  let _ =
+    let e =
+      (* let rec fac n = if n > 0 then n * fac (n - 1) else 1 in fac 5 *)
+      ELetRecIn
+        ( "fac"
+        , EFun
+            ( PVar "n"
+            , EIfThenElse
+                ( EApply (EApply (EBinOp Gt, EVar "n"), EConst (CInt 0))
+                , EApply
+                    ( EApply (EBinOp Mult, EVar "n")
+                    , EApply
+                        ( EVar "fac"
+                        , EApply (EApply (EBinOp Minus, EVar "n"), EConst (CInt 1)) ) )
+                , EConst (CInt 1) ) )
+        , EApply (EVar "fac", EConst (CInt 5)) )
+    in
+    w e |> run_infer
+  in
+  [%expect {| int |}]
+;;
+
+let%expect_test _ =
+  let open Ast in
+  let _ =
+    let e =
+      EMatch
+        ( EConst (CBool true)
+        , [ PConst (CBool true), EConst (CInt 1); PConst (CBool false), EConst (CInt 0) ]
+        )
+    in
+    w e |> run_infer
+  in
+  [%expect {| int |}]
+;;
+
+let%expect_test _ =
+  let open Ast in
+  let _ =
+    let e =
+      ELetRec
+        ( "list_sum"
+        , EFun
+            ( PVar "list"
+            , EMatch
+                ( EVar "list"
+                , [ PConst CNil, EConst (CInt 0)
+                  ; ( PCons (PVar "hd", PVar "tl")
+                    , EApply
+                        ( EApply (EBinOp Plus, EVar "hd")
+                        , EApply (EVar "list_sum", EVar "tl") ) )
+                  ] ) ) )
+    in
+    w e |> run_infer
+  in
+  [%expect {| (int list -> int) |}]
+;;
+
+let%expect_test _ =
+  let open Ast in
+  let _ =
+    let e =
+      ELetRec
+        ("always_true", EFun (PVar "a", EMatch (EVar "a", [ PWild, EConst (CBool true) ])))
+    in
+    w e |> run_infer
+  in
+  [%expect {| ('_2 -> bool) |}]
+;;
+
+let%expect_test _ =
+  let open Ast in
+  let _ =
+    let e =
+      ELet
+        ( "fst"
+        , EFun (PVar "a", EMatch (EVar "a", [ PTuple [ PVar "f"; PVar "s" ], EVar "f" ]))
+        )
+    in
+    w e |> run_infer
+  in
+  [%expect {| (('_1 * '_2) -> '_1) |}]
+;;
+
+let%expect_test _ =
+  let open Ast in
+  let _ =
+    let e =
+      ELetRec
+        ( "list_is_empty"
+        , EFun
+            ( PVar "l"
+            , EMatch
+                ( EVar "l"
+                , [ PConst CNil, EConst (CBool true); PWild, EConst (CBool false) ] ) ) )
+    in
+    w e |> run_infer
+  in
+  [%expect {| ('_2 list -> bool) |}]
 ;;
