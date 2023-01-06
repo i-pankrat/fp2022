@@ -357,16 +357,16 @@ let infer =
   in
   let rec (helper : TypeEnv.t -> Ast.expr -> (Subst.t * ty) R.t) =
    fun env -> function
+    | EVar x -> lookup_env x env
     | EConst const ->
-      let prim =
-        match const with
-        | CBool _ -> "bool"
-        | CInt _ -> "int"
-        | CString _ -> "string"
-        | CUnit -> "unit"
-        | CNil -> failwith "TODO"
-      in
-      return (Subst.empty, Prim prim)
+      (match const with
+       | CBool _ -> return (Subst.empty, Prim "bool")
+       | CInt _ -> return (Subst.empty, Prim "int")
+       | CString _ -> return (Subst.empty, Prim "string")
+       | CUnit -> return (Subst.empty, Prim "unit")
+       | CNil ->
+         let* var = fresh_var in
+         return (Subst.empty, List var))
     | EBinOp op ->
       (match op with
        | Plus | Minus | Divide | Mult | Mod ->
