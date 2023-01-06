@@ -1,3 +1,7 @@
+(** Copyright 2022-2023, Ilya Pankratov *)
+
+(** SPDX-License-Identifier: LGPL-3.0-or-later *)
+
 type binder = int [@@deriving show { with_path = false }]
 
 module VarSetInit = struct
