@@ -94,6 +94,8 @@ module Type = struct
   let rec occurs_in v = function
     | Ty_var b -> b = v
     | Arrow (l, r) -> occurs_in v l || occurs_in v r
+    | List t -> occurs_in v t
+    | Tuple ts -> List.fold ts ~init:false ~f:(fun acc t -> occurs_in v t || acc)
     | Prim _ -> false
   ;;
 
@@ -101,6 +103,8 @@ module Type = struct
     let rec helper acc = function
       | Ty_var b -> VarSetInit.add b acc
       | Arrow (l, r) -> helper (helper acc l) r
+      | List t -> helper acc t
+      | Tuple ts -> List.fold ts ~init:acc ~f:(fun acc t -> helper acc t)
       | Prim _ -> acc
     in
     helper VarSetInit.empty
@@ -157,13 +161,15 @@ end = struct
   let find f m = Map.Poly.find m f
   let remove m f = Map.Poly.remove m f
 
-  let apply s =
+  let apply subst =
     let rec helper = function
       | Ty_var b as ty ->
-        (match find_exn b s with
+        (match find_exn b subst with
          | exception Not_found_s _ -> ty
          | x -> x)
       | Arrow (l, r) -> Arrow (helper l, helper r)
+      | List t -> List (helper t)
+      | Tuple l -> Tuple (List.map ~f:(fun t -> helper t) l)
       | other -> other
     in
     helper
@@ -179,6 +185,8 @@ end = struct
       let* subs1 = unify l1 l2 in
       let* subs2 = unify (apply subs1 r1) (apply subs1 r2) in
       compose subs1 subs2
+    | List a, List b -> unify a b
+    | Tuple a, b | b, Tuple a -> failwith "TODO: unify tuple"
     | _ -> fail (`Unification_failed (l, r))
 
   and extend key value extensible_map =
