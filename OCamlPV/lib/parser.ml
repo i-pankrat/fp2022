@@ -158,61 +158,91 @@ let pack =
 let ppattern = pack.pattern pack
 
 (* expr constructors *)
-
 let econd i t e = EIfThenElse (i, t, e)
 let ematch c pl = EMatch (c, pl)
-let epattern p = EPatterns p
-let elet name args body = ELet (name, args, body)
-let eletrec name args body = ELetRec (name, args, body)
+let elet name body = ELet (name, body)
+let eletin name body bodyin = ELetIn (name, body, bodyin)
+let eletrec name body = ELetRec (name, body)
+let eletrecin name body bodyin = ELetRecIn (name, body, bodyin)
 let efun id body = EFun (id, body)
 let eapply f a = EApply (f, a)
 let evar x = EVar x
+let ebinop op = EBinOp op
 
 (* parse expr *)
 let pevar = evar <$> pIdent
 let peconst = pconst >>| fun x -> EConst x
 
-(* let econd pexpr =
-  let eparse = pexpr in
-  lift3
-    econd
-    (pstoken "if" *> eparse)
-    (pstoken "then" *> eparse)
-    (pstoken "else" *> eparse)
-;; *)
+type edispatch =
+  { evalue : edispatch -> expr t
+  ; econdition : edispatch -> expr t
+  ; elet : edispatch -> expr t
+  ; eletin : edispatch -> expr t
+  ; eletrec : edispatch -> expr t
+  ; eletrecin : edispatch -> expr t
+  ; ematch : edispatch -> expr t
+  ; ebinop : edispatch -> expr t
+  ; efun : edispatch -> expr t
+  ; eapply : edispatch -> expr t
+  ; expr : edispatch -> expr t
+  }
 
-let ematch pexpr =
-  let pepatterns = epattern <$> ppattern in
-  let pecase = pstoken "|" *> pepatterns in
+let econd pif pexpr =
+  lift3 econd (pstoken "if" *> pif) (pstoken1 "then" *> pexpr) (pstoken1 "else" *> pexpr)
+;;
+
+let ematch pmatch pexpr =
+  let pecase = pstoken "|" *> ppattern in
   let pearrow = pstoken "->" *> pexpr in
   let peline = lift2 (fun c a -> c, a) pecase pearrow in
   let pelines = many1 peline in
-  let pematch = pstoken "match" *> pexpr <* pstoken1 "with" in
+  let pematch = pstoken "match" *> pmatch <* pstoken1 "with" in
   lift2 ematch pematch pelines
+;;
+
+let parens_or_not p = p <|> pparens p
+let pargs = many1 @@ parens_or_not @@ ppattern
+
+(* Upgrade using fold_left *)
+let construct_efun args body =
+  let rec helper = function
+    | [] -> body
+    | hd :: tl -> efun hd (helper tl)
+  in
+  helper args
+;;
+
+let pefun pexpr =
+  lift2
+    (fun args expr -> construct_efun args expr)
+    (pstoken "fun" *> pargs)
+    (pstoken "->" *> pexpr)
+;;
+
+let parse_rec_or_not =
+  pstoken "let" *> option "false" (pstoken1 "rec") >>| fun x -> x != "false"
 ;;
 
 let eletfun pexpr =
   lift4
-    (fun flag args name body ->
-      if flag then eletrec args name body else elet args name body)
-    (pstoken "let" *> option "false" (pstoken1 "rec")
-    >>| fun x ->
-    match x with
-    | "false" -> false
-    | _ -> true)
+    (fun flag name args body ->
+      let body = construct_efun args body in
+      if flag then eletrec name body else elet name body)
+    parse_rec_or_not
     pIdent
-    pevar
+    pargs
     (pstoken "=" *> pexpr)
 ;;
 
-let pefun pexpr =
-  lift2 (fun a e -> efun a e) (pstoken "fun" *> pevar) (pstoken "->" *> pexpr)
-;;
-
 let eletdecl pexpr =
-  lift3
-    (fun args name body -> elet args name body)
-    (pstoken "let" *> pIdent)
+  let lift5 f p1 p2 p3 p4 p5 = f <$> p1 <*> p2 <*> p3 <*> p4 <*> p5 in
+  lift5
+    (fun flag name args body1 body2 ->
+      let body1 = construct_efun args body1 in
+      if flag then eletrecin name body1 body2 else eletin name body1 body2)
+    parse_rec_or_not
+    pIdent
+    pargs
     (pstoken1 "=" *> pexpr)
     (pstoken1 "in" *> pexpr)
 ;;
@@ -228,7 +258,7 @@ let from_str_to_binop = function
   | "+" -> Plus
   | "-" -> Minus
   | "*" -> Mult
-  | "\\" -> Divide
+  | "/" -> Divide
   | "&&" -> And
   | "||" -> Or
   | "=" -> Eq
@@ -238,30 +268,30 @@ let from_str_to_binop = function
   | ">=" -> Gtq
   | "<=" -> Ltq
   | "::" -> ConsConcat
-  | _ -> failwith "Should not reach"
+  | _ -> failwith "Such operator does not exist"
 ;;
-
-let cebinop op e1 e2 = EBinOp (op, e1, e2)
 
 let pbinop chain1 term binops =
   chain1
     term
-    ((fun op expr1 expr2 -> cebinop (from_str_to_binop op) expr1 expr2)
-    <$> choice (List.map binops ~f:pstoken))
+    ((fun op expr1 expr2 -> eapply (eapply (ebinop @@ from_str_to_binop op) expr1) expr2)
+    <$> choice ~failure_msg:"Can not parse binary operation" (List.map binops ~f:pstoken)
+    )
 ;;
 
 let pelbinop = pbinop chainl1
 let perbinop = pbinop chainr1
-let pevalue = peconst <|> pevar
+let pevalue = pevar <|> peconst
 
 let peapply pexpr =
-  let args = choice [ pexpr ] in
-  lift2 (fun expr l -> List.fold_left ~f:eapply ~init:expr l) args (many (token1 @@ args))
+  lift2
+    (fun expr l -> List.fold_left ~f:eapply ~init:expr l)
+    pexpr
+    (many (token1 @@ pexpr))
 ;;
 
-let pinfixop pexpr =
-  let term = choice [ pparens pexpr; pevalue ] in
-  let term = peapply term in
+let pbinop pexpr =
+  let term = pexpr in
   let term = pelbinop term [ "*"; "/" ] in
   let term = pelbinop term [ "+"; "-" ] in
   let term = perbinop term [ "::" ] in
@@ -271,18 +301,117 @@ let pinfixop pexpr =
   term
 ;;
 
-let pexpr =
-  fix
-  @@ fun pexpr ->
-  (* let pcond = econd pexpr in *)
-  let pematch = ematch pexpr in
-  let pelets = eletdecl pexpr <|> eletfun pexpr in
-  let pefun = pefun pexpr in
-  let pinfixop = pinfixop pexpr in
-  choice [ pelets; pefun; pematch; pinfixop; pevalue ]
+let pack =
+  let evalue _ = pevalue in
+  let lets pack =
+    choice ~failure_msg:"Failed to parse lets" [ pack.elet pack; pack.eletrec pack ]
+  in
+  let letsin pack =
+    choice ~failure_msg:"Failed to parse letsin" [ pack.eletin pack; pack.eletrecin pack ]
+  in
+  let expr pack =
+    choice
+      ~failure_msg:"Failed to parse expr"
+      (* We have to a mistake with simaltenious parsing of application and binary operations.
+         Now we have to wrap binary operation in braces to parse it corretly :( *)
+      [ letsin pack
+      ; lets pack
+      ; pack.econdition pack
+      ; pack.ebinop pack
+      ; pack.eapply pack
+      ; pack.efun pack
+      ; pack.ematch pack (* ; letsin pack *)
+      ]
+  in
+  let econdition pack =
+    fix
+    @@ fun _ ->
+    let econd_parser =
+      parens_or_not
+      @@ choice
+           ~failure_msg:"Failed to parse condition statement"
+           [ pack.econdition pack
+           ; pack.ebinop pack
+           ; pack.eapply pack
+           ; pack.efun pack
+           ; pack.ematch pack
+           ]
+    in
+    econd econd_parser (pack.expr pack)
+  in
+  let ematch pack =
+    fix
+    @@ fun _ ->
+    let ematch_parse =
+      parens_or_not
+      @@ choice
+           ~failure_msg:"Failed to parse matching expression"
+           [ pack.econdition pack; pack.ematch pack; pack.eapply pack; pack.ebinop pack ]
+    in
+    parens_or_not @@ ematch ematch_parse (pack.expr pack)
+  in
+  let ebinop pack =
+    fix
+    @@ fun _ ->
+    let ebinop_parse =
+      choice
+        ~failure_msg:"Failed to parse binary operation"
+        [ pevalue
+        ; pparens @@ pack.econdition pack
+        ; pparens @@ pack.ematch pack
+        ; pparens @@ pack.eapply pack
+        ; pparens @@ pack.ebinop pack
+        ]
+    in
+    parens_or_not @@ pbinop ebinop_parse
+  in
+  let efun pack = parens_or_not @@ fix @@ fun _ -> pefun @@ pack.expr pack in
+  let eapply pack =
+    fix
+    @@ fun _ ->
+    let eapply_parse =
+      parens_or_not
+      @@ choice
+           ~failure_msg:"Failed to parse application"
+           [ pack.evalue pack
+           ; pparens @@ pack.econdition pack
+           ; pparens @@ pack.ematch pack
+           ; pparens @@ pack.eapply pack
+           ; pparens @@ pack.ebinop pack
+           ]
+    in
+    peapply eapply_parse
+  in
+  let lets_parsers pack =
+    choice
+      ~failure_msg:"Failed to parse lets"
+      [ pack.ebinop pack
+      ; pack.efun pack
+      ; pack.econdition pack
+      ; pack.ematch pack
+      ; pack.eapply pack
+      ; letsin pack
+      ]
+  in
+  let elet pack = fix @@ fun _ -> eletfun @@ lets_parsers pack in
+  let eletin pack = fix @@ fun _ -> eletdecl @@ lets_parsers pack in
+  let eletrec pack = fix @@ fun _ -> eletfun @@ lets_parsers pack in
+  let eletrecin pack = fix @@ fun _ -> eletdecl @@ lets_parsers pack in
+  { evalue
+  ; econdition
+  ; elet
+  ; eletin
+  ; eletrec
+  ; eletrecin
+  ; ematch
+  ; ebinop
+  ; efun
+  ; eapply
+  ; expr
+  }
 ;;
 
-(* let eapply pexpr = lift2 eapply pexpr (token1 pexpr) *)
+let pexpr = pack.expr pack
 
 (* PARSER TESTS*)
 let interprete_parse_result fm p str =
