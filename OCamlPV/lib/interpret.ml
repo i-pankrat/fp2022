@@ -184,3 +184,21 @@ let%test _ =
   | Base.Result.Ok (VInt 5) -> true
   | _ -> false
 ;;
+
+let test =
+  EApply
+    ( EApply
+        ( EBinOp Mult
+        , EApply
+            ( EApply
+                ( EBinOp Mult
+                , EApply (EApply (EBinOp Plus, EConst (CInt 1)), EConst (CInt 1)) )
+            , EApply (EApply (EBinOp Minus, EConst (CInt 5)), EConst (CInt 2)) ) )
+    , EApply (EApply (EBinOp Divide, EConst (CInt 42)), EConst (CInt 6)) )
+;;
+
+let%test _ =
+  match InterpretResult.run test with
+  | Base.Result.Ok (VInt 42) -> true
+  | _ -> false
+;;
