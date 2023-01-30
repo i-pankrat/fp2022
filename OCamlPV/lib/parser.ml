@@ -35,12 +35,12 @@ let is_ident_symbol = function
 ;;
 
 let is_kw = function
-  | "let" | "match" | "if" | "else" | "than" | "fun" | "with" | "in" | "" -> true
+  | "let" | "match" | "if" | "else" | "than" | "fun" | "with" | "in" -> true
   | _ -> false
 ;;
 
 let prohibited = function
-  | "=" | "match" | "if" | "else" | "than" | "fun" | "with" | "in" | "let" -> true
+  | "=" | "" | "+" | "-" | "(" | ")" | "[" | "]" | "#" | "%" | "^" | "&" -> true
   | _ -> false
 ;;
 
@@ -92,46 +92,70 @@ let construct_pcons h t = PCons (h, t)
 
 let ppconst = pconst >>| fun x -> PConst x
 let ppvar = pIdent >>| fun x -> PVar x
-let pptuple t = pparens @@ sep_by (pstoken ",") t
-let pplist t = pbrackets @@ sep_by (pstoken ";") t
 let pwild = pstoken "_" *> return PWild
 
-(* TEST *)
+let rec create_cons = function
+  | [] -> PConst CNil
+  | hd :: [] when equal_pattern hd (PConst CNil) -> PConst CNil
+  | hd :: tl -> construct_pcons hd (create_cons tl)
+;;
+
+let parse_cons_semicolon parser =
+  create_cons <$> pbrackets @@ sep_by1 (pstoken ";") parser
+;;
+
+let parse_cons_doublecolon parser =
+  lift2
+    (fun a b -> create_cons @@ (a :: b))
+    (parser <* trim @@ pstoken "::")
+    (sep_by1 (trim @@ pstoken "::") parser)
+;;
+
+let parse_tuple_parens parser =
+  construct_ptuple <$> pparens @@ sep_by1 (pstoken ",") parser
+;;
+
+let parse_tuple parser =
+  lift2
+    (fun a b -> construct_ptuple @@ (a :: b))
+    (parser <* trim @@ pstoken ",")
+    (sep_by1 (trim @@ pstoken ",") parser)
+;;
 
 type pdispatch =
-  { cons : pdispatch -> pattern t
-  ; tuple : pdispatch -> pattern t
+  { cons_sc : pdispatch -> pattern t
+  ; cons_dc : pdispatch -> pattern t
+  ; tuple_p : pdispatch -> pattern t
+  ; tuple_wp : pdispatch -> pattern t
+  ; value : pdispatch -> pattern t
   ; pattern : pdispatch -> pattern t
   }
 
 let pack =
   let pattern pack =
-    fix @@ fun _ -> choice [ ppvar; ppconst; pwild; pack.cons pack; pack.tuple pack ]
+    choice
+      ~failure_msg:"There are no appropriate parser"
+      [ pack.tuple_p pack
+      ; pack.tuple_wp pack
+      ; pack.cons_sc pack
+      ; pack.cons_dc pack
+      ; pack.value pack
+      ]
   in
-  let tuple pack =
-    fix
-    @@ fun _ -> construct_ptuple <$> pparens @@ sep_by1 (pstoken ",") (pack.pattern pack)
+  let parsers pack =
+    choice
+      ~failure_msg:"Can not parse internal list/tuple"
+      [ pack.value pack; pack.tuple_p pack; pack.cons_sc pack ]
   in
-  let rec create_cons = function
-    | [] -> PConst CNil
-    | hd :: tl -> construct_pcons hd (create_cons tl)
-  in
-  let cons pack =
-    fix @@ fun _ -> create_cons <$> pbrackets @@ sep_by1 (pstoken ";") (pack.pattern pack)
-  in
-  { cons; tuple; pattern }
+  let value _ = ppvar <|> ppconst <|> pwild in
+  let tuple_p pack = fix @@ fun _ -> parse_tuple_parens (parsers pack) in
+  let tuple_wp pack = fix @@ fun _ -> parse_tuple (parsers pack) in
+  let cons_sc pack = fix @@ fun _ -> parse_cons_semicolon (parsers pack) in
+  let cons_dc pack = fix @@ fun _ -> parse_cons_doublecolon (parsers pack) in
+  { cons_sc; cons_dc; tuple_p; tuple_wp; value; pattern }
 ;;
 
-let ppattern =
-  fix
-  @@ fun _ ->
-  let rec create_cons len = function
-    | [] -> PConst CNil
-    | [ a ] -> if len = 0 then a else construct_pcons a (PConst CNil)
-    | hd :: tl -> construct_pcons hd (create_cons (len + 1) tl)
-  in
-  create_cons 0 <$> sep_by (pstoken "::") (pack.pattern pack)
-;;
+let ppattern = pack.pattern pack
 
 (* expr constructors *)
 
