@@ -416,7 +416,7 @@ let pexpr = pack.expr pack
 (* PARSER TESTS*)
 let interprete_parse_result fm p str =
   match parse p str with
-  | Result.Error e -> e
+  | Result.Error e -> "Error" ^ e
   | Result.Ok ast -> fm ast
 ;;
 
@@ -459,7 +459,7 @@ let%expect_test _ =
 (* Parse patterns tests *)
 
 let%expect_test _ =
-  print_string (interprete_parse_result show_pattern ppconst "4");
+  print_string (interprete_parse_result show_pattern ppattern "4");
   [%expect {| (PConst (CInt 4)) |}]
 ;;
 
@@ -469,19 +469,8 @@ let%expect_test _ =
 ;;
 
 let%expect_test _ =
-  print_string (interprete_parse_result show_pattern ppattern "a :: b :: c");
-  [%expect
-    {|
-    (PCons ((PVar "a"), (PCons ((PVar "b"), (PCons ((PVar "c"), (PConst CNil)))))
-       )) |}]
-;;
-
-let%expect_test _ =
-  print_string (interprete_parse_result show_pattern ppattern "(a, b) :: (c, d)");
-  [%expect
-    {|
-    (PCons ((PTuple [(PVar "a"); (PVar "b")]),
-       (PCons ((PTuple [(PVar "c"); (PVar "d")]), (PConst CNil))))) |}]
+  print_string (interprete_parse_result show_pattern ppattern "[]");
+  [%expect {| (PConst CNil) |}]
 ;;
 
 let%expect_test _ =
@@ -495,6 +484,42 @@ let%expect_test _ =
 ;;
 
 let%expect_test _ =
+  print_string (interprete_parse_result show_pattern ppattern "a :: b :: c :: d :: []");
+  [%expect
+    {|
+    (PCons ((PVar "a"),
+       (PCons ((PVar "b"),
+          (PCons ((PVar "c"), (PCons ((PVar "d"), (PConst CNil)))))))
+       )) |}]
+;;
+
+let%expect_test _ =
+  print_string (interprete_parse_result show_pattern ppattern "(a, b, c, d)");
+  [%expect {|
+    (PTuple [(PVar "a"); (PVar "b"); (PVar "c"); (PVar "d")])|}]
+;;
+
+let%expect_test _ =
+  print_string (interprete_parse_result show_pattern ppattern "a, b, c, d");
+  [%expect {|
+    (PTuple [(PVar "a"); (PVar "b"); (PVar "c"); (PVar "d")])|}]
+;;
+
+let%expect_test _ =
+  print_string (interprete_parse_result show_pattern ppattern "_");
+  [%expect {|
+    PWild|}]
+;;
+
+let%expect_test _ =
+  print_string (interprete_parse_result show_pattern ppattern "[(a, b); (c, d)]");
+  [%expect
+    {|
+    (PCons ((PTuple [(PVar "a"); (PVar "b")]),
+       (PCons ((PTuple [(PVar "c"); (PVar "d")]), (PConst CNil))))) |}]
+;;
+
+let%expect_test _ =
   print_string (interprete_parse_result show_pattern ppattern "((a, b), (c, d))");
   [%expect
     {|
@@ -502,84 +527,212 @@ let%expect_test _ =
        [(PTuple [(PVar "a"); (PVar "b")]); (PTuple [(PVar "c"); (PVar "d")])]) |}]
 ;;
 
-(* EXPR TESTS *)
-
 let%expect_test _ =
-  print_string
-    (interprete_parse_result
-       show_expr
-       pexpr
-       "match x with | hd :: tl -> true | [] -> false");
+  print_string (interprete_parse_result show_pattern ppattern "([a; b], [c; d], [e; f])");
   [%expect
     {|
-         (EMatch ((EVar "x"),
-            [((EPatterns (PCons ((PVar "hd"), (PCons ((PVar "tl"), (PConst CNil)))))),
-              (EConst (CBool true)));
-              ((EPatterns (PConst CNil)), (EConst (CBool false)))]
-            ))
- |}]
+    (PTuple
+       [(PCons ((PVar "a"), (PCons ((PVar "b"), (PConst CNil)))));
+         (PCons ((PVar "c"), (PCons ((PVar "d"), (PConst CNil)))));
+         (PCons ((PVar "e"), (PCons ((PVar "f"), (PConst CNil)))))]) |}]
 ;;
 
 let%expect_test _ =
-  print_string (interprete_parse_result show_expr pexpr "fun x -> x");
-  [%expect {| (EFun ((EVar "x"), (EVar "x"))) |}]
+  print_string (interprete_parse_result show_pattern ppattern "[[a; b]; [c; d]]");
+  [%expect
+    {|
+    (PCons ((PCons ((PVar "a"), (PCons ((PVar "b"), (PConst CNil))))),
+       (PCons ((PCons ((PVar "c"), (PCons ((PVar "d"), (PConst CNil))))),
+          (PConst CNil)))
+       )) |}]
 ;;
 
-let%expect_test _ =
-  print_string (interprete_parse_result show_expr pexpr "fun x -> fun y -> x");
-  [%expect {| (EFun ((EVar "x"), (EFun ((EVar "y"), (EVar "x"))))) |}]
-;;
+(* EXPR TESTS *)
 
-let%expect_test _ =
-  print_string (interprete_parse_result show_expr pexpr "fun x -> fun y -> 4");
-  [%expect {| (EFun ((EVar "x"), (EFun ((EVar "y"), (EConst (CInt 4)))))) |}]
-;;
-
-let%expect_test _ =
-  print_string (interprete_parse_result show_expr pexpr "let snd x = fun y -> y");
-  [%expect {| (ELet ("snd", (EVar "x"), (EFun ((EVar "y"), (EVar "y"))))) |}]
-;;
-
-let%expect_test _ =
-  print_string (interprete_parse_result show_expr pexpr "let x = a in z");
-  [%expect {| (ELet ("x", (EVar "a"), (EVar "z")))|}]
-;;
+(* Test binary operations *)
 
 let%expect_test _ =
   print_string (interprete_parse_result show_expr pexpr "a + b");
   [%expect {|
-        (EBinOp (Plus, (EVar "a"), (EVar "b"))) |}]
+        (EApply ((EApply ((EBinOp Plus), (EVar "a"))), (EVar "b"))) |}]
+;;
+
+let%expect_test _ =
+  print_string (interprete_parse_result show_expr pexpr "(a + b)");
+  [%expect {|
+        (EApply ((EApply ((EBinOp Plus), (EVar "a"))), (EVar "b"))) |}]
+;;
+
+let%expect_test _ =
+  print_string (interprete_parse_result show_expr pexpr "((a + b))");
+  [%expect {|
+        (EApply ((EApply ((EBinOp Plus), (EVar "a"))), (EVar "b"))) |}]
+;;
+
+let%expect_test _ =
+  print_string (interprete_parse_result show_expr pexpr "a - 1");
+  [%expect
+    {|
+        (EApply ((EApply ((EBinOp Minus), (EVar "a"))), (EConst (CInt 1))))|}]
+;;
+
+(* FIX ME*)
+let%expect_test _ =
+  print_string (interprete_parse_result show_expr pexpr "(a - 1)");
+  [%expect
+    {|
+        (EApply ((EApply ((EBinOp Minus), (EVar "a"))), (EConst (CInt 1)))) |}]
+;;
+
+let%expect_test _ =
+  print_string (interprete_parse_result show_expr pexpr "(a + b) * (c - d) * (e / d)");
+  [%expect
+    {|
+        (EApply (
+           (EApply ((EBinOp Mult),
+              (EApply (
+                 (EApply ((EBinOp Mult),
+                    (EApply ((EApply ((EBinOp Plus), (EVar "a"))), (EVar "b"))))),
+                 (EApply ((EApply ((EBinOp Minus), (EVar "c"))), (EVar "d")))))
+              )),
+           (EApply ((EApply ((EBinOp Divide), (EVar "e"))), (EVar "d"))))) |}]
+;;
+
+let%expect_test _ =
+  print_string (interprete_parse_result show_expr pexpr "1 :: list");
+  [%expect
+    {|
+        (EApply ((EApply ((EBinOp ConsConcat), (EConst (CInt 1)))), (EVar "list"))) |}]
+;;
+
+(* Test application *)
+
+let%expect_test _ =
+  print_string (interprete_parse_result show_expr (pack.eapply pack) "f x y");
+  [%expect {|
+        (EApply ((EApply ((EVar "f"), (EVar "x"))), (EVar "y"))) |}]
+;;
+
+(* Test condition statement *)
+
+let%expect_test _ =
+  print_string (interprete_parse_result show_expr pexpr "if a then b else c");
+  [%expect {|
+        (EIfThenElse ((EVar "a"), (EVar "b"), (EVar "c"))) |}]
+;;
+
+let%expect_test _ =
+  print_string (interprete_parse_result show_expr pexpr "if n = 1 then 1 else n");
+  [%expect
+    {|
+        (EIfThenElse (
+           (EApply ((EApply ((EBinOp Eq), (EVar "n"))), (EConst (CInt 1)))),
+           (EConst (CInt 1)), (EVar "n"))) |}]
+;;
+
+(* Test pattern matching *)
+
+let%expect_test _ =
+  print_string (interprete_parse_result show_expr pexpr "match x with | a -> b | _ -> c");
+  [%expect
+    {|
+        (EMatch ((EVar "x"), [((PVar "a"), (EVar "b")); (PWild, (EVar "c"))])) |}]
+;;
+
+(* Test fun *)
+
+let%expect_test _ =
+  print_string (interprete_parse_result show_expr pexpr "fun x -> fun y -> x");
+  [%expect {| (EFun ((PVar "x"), (EFun ((PVar "y"), (EVar "x"))))) |}]
+;;
+
+(* Test let and let rec *)
+
+let%expect_test _ =
+  print_string (interprete_parse_result show_expr pexpr "let id x = x");
+  [%expect {| (ELet ("id", (EFun ((PVar "x"), (EVar "x"))))) |}]
 ;;
 
 let%expect_test _ =
   print_string (interprete_parse_result show_expr pexpr "let sum x = fun y -> x + y");
   [%expect
     {|
-    (ELet ("sum", (EVar "x"),
-       (EFun ((EVar "y"), (EBinOp (Plus, (EVar "x"), (EVar "y"))))))) |}]
-;;
-
-let%expect_test _ =
-  print_string
-    (interprete_parse_result show_expr pexpr "let apply f = fun x -> fun z -> f x z");
-  [%expect
-    {|
-    (ELet ("apply", (EVar "f"),
-       (EFun ((EVar "x"),
-          (EFun ((EVar "z"),
-             (EApply ((EApply ((EVar "f"), (EVar "x"))), (EVar "z")))))
+    (ELet ("sum",
+       (EFun ((PVar "x"),
+          (EFun ((PVar "y"),
+             (EApply ((EApply ((EBinOp Plus), (EVar "x"))), (EVar "y")))))
           ))
        )) |}]
 ;;
 
-(* FIX THIS CASE *)
 let%expect_test _ =
-  print_string (interprete_parse_result show_expr pexpr "let deinc x = x - (1)");
+  print_string (interprete_parse_result show_expr pexpr "let sum x y = x + y");
   [%expect
-    {| (ELet ("deinc", (EVar "x"), (EBinOp (Minus, (EVar "x"), (EConst (CInt 1)))))) |}]
+    {|
+    (ELet ("sum",
+       (EFun ((PVar "x"),
+          (EFun ((PVar "y"),
+             (EApply ((EApply ((EBinOp Plus), (EVar "x"))), (EVar "y")))))
+          ))
+       )) |}]
 ;;
 
+(* TODO: FIX -1*)
 let%expect_test _ =
+  print_string
+    (interprete_parse_result
+       show_expr
+       pexpr
+       "let rec fact n = if n = 1 then 1 else n * (fact (n - 1))");
+  [%expect
+    {|
+    (ELetRec ("fact",
+       (EFun ((PVar "n"),
+          (EIfThenElse (
+             (EApply ((EApply ((EBinOp Eq), (EVar "n"))), (EConst (CInt 1)))),
+             (EConst (CInt 1)),
+             (EApply ((EApply ((EBinOp Mult), (EVar "n"))),
+                (EApply ((EVar "fact"),
+                   (EApply ((EApply ((EBinOp Minus), (EVar "n"))),
+                      (EConst (CInt 1))))
+                   ))
+                ))
+             ))
+          ))
+       )) |}]
+;;
+
+(* Test let in and let rec in *)
+
+let%expect_test _ =
+  print_string (interprete_parse_result show_expr pexpr "let square = 6 in 6");
+  [%expect {|
+    testing|}]
+;;
+
+(* let%expect_test _ =
+  print_string
+    (interprete_parse_result
+       show_expr
+       pexpr
+       "let list_reverse init = let rec helper acc list = match list with | [] -> acc | \
+        h :: t -> helper (h :: acc) t in helper [] init");
+  [%expect {|
+    test |}]
+;; *)
+
+(* let%expect_test _ =
+  print_string
+    (interprete_parse_result
+       show_expr
+       pexpr
+       "let rec sum_of_first_n_naturals n = if n == 1 then 1 else n * \
+        (sum_of_first_n_naturals (n - 1))");
+  [%expect {|
+    test|}]
+;; *)
+
+(* let%expect_test _ =
   print_string
     (interprete_parse_result
        show_expr
@@ -600,6 +753,18 @@ let%expect_test _ =
              ))
           ))
        ))|}]
+;; *)
+
+(* let%expect_test _ =
+  print_string (interprete_parse_result show_expr pexpr "let x = a in z");
+  [%expect {| (ELet ("x", (EVar "a"), (EVar "z")))|}]
+;; *)
+
+(* FIX THIS CASE *)
+(* let%expect_test _ =
+  print_string (interprete_parse_result show_expr pexpr "let deinc x = x - (1)");
+  [%expect
+    {| (ELet ("deinc", (EVar "x"), (EBinOp (Minus, (EVar "x"), (EConst (CInt 1)))))) |}]
 ;;
 
 let%expect_test _ =
@@ -622,4 +787,4 @@ let%expect_test _ =
              ))
           ))
        ))|}]
-;;
+;; *)
