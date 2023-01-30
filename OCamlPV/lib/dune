@@ -13,5 +13,5 @@
   Typedtree)
  (libraries base angstrom)
  (preprocess
-  (pps ppx_expect ppx_deriving.show))
+  (pps ppx_expect ppx_deriving.show ppx_deriving.eq))
  (inline_tests))

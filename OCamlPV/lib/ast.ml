@@ -2,7 +2,7 @@
 
 (** SPDX-License-Identifier: LGPL-3.0-or-later *)
 
-type id = string [@@deriving show { with_path = false }]
+type id = string [@@deriving eq, show { with_path = false }]
 
 type const =
   | CInt of int
@@ -10,7 +10,7 @@ type const =
   | CNil
   | CString of string
   | CUnit
-[@@deriving show { with_path = false }]
+[@@deriving eq, show { with_path = false }]
 
 and bin_op =
   | Plus
@@ -35,7 +35,7 @@ and pattern =
   | PTuple of pattern list
   | PCons of pattern * pattern (* head and tail *)
   | PWild
-[@@deriving show { with_path = false }]
+[@@deriving eq, show { with_path = false }]
 
 and expr =
   | EConst of const
