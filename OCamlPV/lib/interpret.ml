@@ -21,19 +21,25 @@ type ierror =
   | UnsupportedOperation
   | PatternMismatch
 
+type 'a binop =
+  | EmptyBinOp of bin_op
+  | PartialBinOp of 'a * bin_op
+
 type value =
   | VInt of int
   | VBool of bool
   | VString of string
   | VTuple of value list
-  | Vlist of value list
+  | VList of value list
   | VFun of pattern * expr
+  | VBinOp of value binop
   | VUnit
 
 let cvint i = VInt i
 let cvbool b = VBool b
 let cvstring s = VString s
 let cvfun p e = VFun (p, e)
+let cvbinop op = VBinOp op
 
 type environment = (id, value, String.comparator_witness) Map.t
 (* ((id, value, String.comparator_witness) Map.t  ? *)
@@ -69,8 +75,8 @@ end = struct
   open M
   open Env (M)
 
-  let eval_binop op e1 e2 =
-    let eval_inequalities = function
+  let eval_binop arg =
+    let eval_comparison = function
       | Eq -> Poly.( = )
       | Neq -> Poly.( <> )
       | Gt -> Poly.( > )
@@ -79,21 +85,40 @@ end = struct
       | Ltq -> Poly.( <= )
       | _ -> failwith "Unsupported operation. TODO: fix that"
     in
-    match op, e1, e2 with
-    | Plus, VInt i1, VInt i2 -> return @@ cvint (i1 + i2)
-    | Minus, VInt i1, VInt i2 -> return @@ cvint (i1 - i2)
-    | Mult, VInt i1, VInt i2 -> return @@ cvint (i1 * i2)
-    | Divide, VInt _, VInt i2 when i2 = 0 -> fail DivisionByZero
-    | Divide, VInt i1, VInt i2 -> return @@ cvint (i1 / i2)
-    | Mod, VInt _, VInt i2 when i2 = 0 -> fail DivisionByZero
-    | Mod, VInt i1, VInt i2 -> return @@ cvint (i1 % i2)
-    | And, VBool b1, VBool b2 -> return @@ cvbool (b1 && b2)
-    | Or, VBool b1, VBool b2 -> return @@ cvbool (b1 || b2)
-    | ConsConcat, _, _ -> failwith "TODO1"
-    | op, VInt i1, VInt i2 -> return @@ cvbool @@ (eval_inequalities op) i1 i2
-    | op, VBool b1, VBool b2 -> return @@ cvbool @@ (eval_inequalities op) b1 b2
-    | op, VString s1, VString s2 -> return @@ cvbool @@ (eval_inequalities op) s1 s2
-    | _ -> failwith "TODO2"
+    function
+    | EmptyBinOp op ->
+      (match op, arg with
+       | Plus, VInt _
+       | Minus, VInt _
+       | Mult, VInt _
+       | Divide, VInt _
+       | Mod, VInt _
+       | And, VBool _
+       | Or, VBool _
+       | ConsConcat, VList _
+       | Eq, _
+       | Neq, _
+       | Gt, _
+       | Lt, _
+       | Gtq, _
+       | Ltq, _ -> return @@ cvbinop @@ PartialBinOp (arg, op)
+       | _ -> failwith "TODO 10")
+    | PartialBinOp (farg, op) ->
+      (match op, farg, arg with
+       | Plus, VInt i1, VInt i2 -> return @@ cvint (i1 + i2)
+       | Minus, VInt i1, VInt i2 -> return @@ cvint (i1 - i2)
+       | Mult, VInt i1, VInt i2 -> return @@ cvint (i1 * i2)
+       | Divide, VInt _, VInt i2 when i2 = 0 -> fail DivisionByZero
+       | Divide, VInt i1, VInt i2 -> return @@ cvint (i1 / i2)
+       | Mod, VInt _, VInt i2 when i2 = 0 -> fail DivisionByZero
+       | Mod, VInt i1, VInt i2 -> return @@ cvint (i1 % i2)
+       | And, VBool b1, VBool b2 -> return @@ cvbool (b1 && b2)
+       | Or, VBool b1, VBool b2 -> return @@ cvbool (b1 || b2)
+       | ConsConcat, _, _ -> failwith "TODO1"
+       | op, VInt i1, VInt i2 -> return @@ cvbool @@ (eval_comparison op) i1 i2
+       | op, VBool b1, VBool b2 -> return @@ cvbool @@ (eval_comparison op) b1 b2
+       | op, VString s1, VString s2 -> return @@ cvbool @@ (eval_comparison op) s1 s2
+       | _ -> failwith "NEVER SHOULD HAPPEN")
   ;;
 
   let eval_patterns = function
@@ -120,13 +145,15 @@ end = struct
     | EVar var -> find env var
     | EApply (func, arg) ->
       let* evaled_fun = eval func env in
+      let* evaled_arg = eval arg env in
       (match evaled_fun with
        | VFun (pat, expr) ->
-         let* evaled_arg = eval arg env in
          let* evaled_pat = eval_patterns (pat, evaled_arg) in
          let* new_env = extend env evaled_pat in
          eval expr new_env
+       | VBinOp op -> eval_binop evaled_arg op
        | _ -> failwith "TODO4")
+    | EBinOp op -> return @@ cvbinop @@ EmptyBinOp op
     | EMatch (matched, patterns) -> failwith "TODO5"
     | _ -> failwith "TODO6"
   ;;
