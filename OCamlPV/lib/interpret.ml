@@ -52,7 +52,9 @@ module Env (M : FailMonad) = struct
   let extend_by_one id value env =
     match Map.add env ~key:id ~data:value with
     | `Ok env -> env
-    | `Duplicate -> env
+    | `Duplicate ->
+      Map.mapi env ~f:(fun ~key:name ~data:old_value ->
+        if Poly.( = ) id name then value else old_value)
   ;;
 
   List.fold_left
