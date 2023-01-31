@@ -10,6 +10,7 @@ open Base
 module type FailMonad = sig
   include Base.Monad.S2
 
+  val run : ('a, 'e) t -> ok:('a -> ('b, 'e) t) -> err:('e -> ('b, 'e) t) -> ('b, 'e) t
   val fail : 'e -> ('a, 'e) t
   val ( let* ) : ('a, 'e) t -> ('a -> ('b, 'e) t) -> ('b, 'e) t
 end
@@ -123,7 +124,7 @@ end = struct
        | _ -> failwith "NEVER SHOULD HAPPEN")
   ;;
 
-  let eval_patterns = function
+  let eval_pattern = function
     | PWild, _ -> return []
     | PVar name, value -> return [ name, value ]
     | PConst const, cvalue ->
@@ -150,14 +151,45 @@ end = struct
       let* evaled_arg = eval arg env in
       (match evaled_fun with
        | VFun (pat, expr) ->
-         let* evaled_pat = eval_patterns (pat, evaled_arg) in
+         let* evaled_pat = eval_pattern (pat, evaled_arg) in
          let* new_env = extend env evaled_pat in
          eval expr new_env
        | VBinOp op -> eval_binop evaled_arg op
-       | _ -> failwith "TODO4")
+       | _ -> failwith "TODO")
     | EBinOp op -> return @@ cvbinop @@ EmptyBinOp op
-    | EMatch (matched, patterns) -> failwith "TODO5"
-    | _ -> failwith "TODO6"
+    | EIfThenElse (c, t, e) ->
+      let* evaled_condtion = eval c env in
+      (match evaled_condtion with
+       | VBool res -> if res then eval t env else eval e env
+       | _ -> failwith "Typechecker already checked that :)")
+    | EMatch (matched, patterns) ->
+      let* evaled_match = eval matched env in
+      let rec eval_match_expr = function
+        | [] -> fail PatternMismatch
+        | (p, e) :: tl ->
+          let res = eval_pattern (p, evaled_match) in
+          run
+            res
+            ~ok:(fun res ->
+              let* env = extend env res in
+              eval e env)
+            ~err:(fun _res -> eval_match_expr tl)
+      in
+      eval_match_expr patterns
+    | ELet (_, expr) -> eval expr env
+    | ELetRec (name, expr) ->
+      let* rec_expr = eval expr env in
+      let* env = extend env [ name, rec_expr ] in
+      eval expr env
+    | ELetIn (name, expr1, expr2) ->
+      let* evaled_expr1 = eval expr1 env in
+      let* env = extend env [ name, evaled_expr1 ] in
+      eval expr2 env
+    | ELetRecIn (name, expr1, expr2) ->
+      let new_expr = ELetRec (name, expr1) in
+      let* evaled1 = eval new_expr env in
+      let* env = extend env [ name, evaled1 ] in
+      eval expr2 env
   ;;
 
   let run program =
