@@ -49,4 +49,6 @@ and expr =
   | EVar of id
   | EFun of pattern * expr
   | EApply of expr * expr
+  | EList of expr * expr
+  | ETuple of expr list
 [@@deriving show { with_path = false }]
