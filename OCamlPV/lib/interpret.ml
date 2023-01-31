@@ -236,3 +236,38 @@ let%test _ =
   | Base.Result.Ok (VInt 42) -> true
   | _ -> false
 ;;
+
+let test =
+  ELetIn
+    ( "inc"
+    , EFun (PVar "x", EApply (EApply (EBinOp Plus, EConst (CInt 1)), EVar "x"))
+    , EApply (EVar "inc", EConst (CInt 5)) )
+;;
+
+let%test _ =
+  match InterpretResult.run test with
+  | Base.Result.Ok (VInt 6) -> true
+  | _ -> false
+;;
+
+let test =
+  ELetRecIn
+    ( "sum"
+    , EFun
+        ( PVar "x"
+        , EIfThenElse
+            ( EApply (EApply (EBinOp Eq, EConst (CInt 1)), EVar "x")
+            , EConst (CInt 1)
+            , EApply
+                ( EApply (EBinOp Plus, EVar "x")
+                , EApply
+                    (EVar "sum", EApply (EApply (EBinOp Minus, EVar "x"), EConst (CInt 1)))
+                ) ) )
+    , EApply (EVar "sum", EConst (CInt 2)) )
+;;
+
+let%test _ =
+  match InterpretResult.run test with
+  | Base.Result.Ok (VInt 3) -> true
+  | _ -> false
+;;
