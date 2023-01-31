@@ -16,11 +16,12 @@ module type FailMonad = sig
 end
 
 type ierror =
-  | DivisionByZero
-  | UnboudnValue
-  | TypeMismatch
-  | UnsupportedOperation
-  | PatternMismatch
+  [ `DivisionByZero
+  | `UnboudnValue
+  | `TypeMismatch
+  | `UnsupportedOperation
+  | `PatternMismatch
+  ]
 
 type 'a binop =
   | EmptyBinOp of bin_op
@@ -111,9 +112,9 @@ end = struct
        | Plus, VInt i1, VInt i2 -> return @@ cvint (i1 + i2)
        | Minus, VInt i1, VInt i2 -> return @@ cvint (i1 - i2)
        | Mult, VInt i1, VInt i2 -> return @@ cvint (i1 * i2)
-       | Divide, VInt _, VInt i2 when i2 = 0 -> fail DivisionByZero
+       | Divide, VInt _, VInt i2 when i2 = 0 -> fail `DivisionByZero
        | Divide, VInt i1, VInt i2 -> return @@ cvint (i1 / i2)
-       | Mod, VInt _, VInt i2 when i2 = 0 -> fail DivisionByZero
+       | Mod, VInt _, VInt i2 when i2 = 0 -> fail `DivisionByZero
        | Mod, VInt i1, VInt i2 -> return @@ cvint (i1 % i2)
        | And, VBool b1, VBool b2 -> return @@ cvbool (b1 && b2)
        | Or, VBool b1, VBool b2 -> return @@ cvbool (b1 || b2)
@@ -132,8 +133,8 @@ end = struct
        | CBool b1, VBool b2 when Poly.( = ) b1 b2 -> return []
        | CInt i1, VInt i2 when Poly.( = ) i1 i2 -> return []
        | CString s1, VString s2 when Poly.( = ) s1 s2 -> return []
-       | _ -> fail PatternMismatch)
-    | _ -> fail PatternMismatch (* Списки, кортежи нужно добавить ешё*)
+       | _ -> fail `PatternMismatch)
+    | _ -> fail `PatternMismatch (* Списки, кортежи нужно добавить ешё*)
   ;;
 
   let rec eval expr env =
@@ -165,7 +166,7 @@ end = struct
     | EMatch (matched, patterns) ->
       let* evaled_match = eval matched env in
       let rec eval_match_expr = function
-        | [] -> fail PatternMismatch
+        | [] -> fail `PatternMismatch
         | (p, e) :: tl ->
           let res = eval_pattern (p, evaled_match) in
           run
@@ -269,5 +270,55 @@ let test =
 let%test _ =
   match InterpretResult.run test with
   | Base.Result.Ok (VInt 3) -> true
+  | _ -> false
+;;
+
+let test =
+  ELetRecIn
+    ( "fib"
+    , EFun
+        ( PVar "n"
+        , EIfThenElse
+            ( EApply (EApply (EBinOp Gtq, EConst (CInt 1)), EVar "n")
+            , EConst (CInt 1)
+            , EApply
+                ( EApply
+                    ( EBinOp Plus
+                    , EApply
+                        ( EVar "fib"
+                        , EApply (EApply (EBinOp Minus, EVar "n"), EConst (CInt 1)) ) )
+                , EApply
+                    (EVar "fib", EApply (EApply (EBinOp Minus, EVar "n"), EConst (CInt 2)))
+                ) ) )
+    , EApply (EVar "fib", EConst (CInt 6)) )
+;;
+
+let%test _ =
+  match InterpretResult.run test with
+  | Base.Result.Ok (VInt 13) -> true
+  | _ -> false
+;;
+
+let test =
+  ELetRecIn
+    ( "fac"
+    , EFun
+        ( PVar "n"
+        , EIfThenElse
+            ( EApply (EApply (EBinOp Eq, EConst (CInt 1)), EVar "n")
+            , EConst (CInt 1)
+            , EApply
+                ( EApply
+                    ( EBinOp Mult
+                    , EApply
+                        ( EVar "fac"
+                        , EApply (EApply (EBinOp Minus, EVar "n"), EConst (CInt 1)) ) )
+                , EVar "n" ) ) )
+    , EApply (EVar "fac", EConst (CInt 5)) )
+;;
+
+let%test _ =
+  match InterpretResult.run test with
+  | Base.Result.Ok (VInt 120) -> true
   | _ -> false
 ;;
