@@ -21,6 +21,7 @@ type ierror =
   | `TypeMismatch
   | `UnsupportedOperation
   | `PatternMismatch
+  | `EmptyInput
   ]
 
 let show_ierror : ierror -> string = function
@@ -29,6 +30,7 @@ let show_ierror : ierror -> string = function
   | `TypeMismatch -> "TypeMismatch"
   | `UnsupportedOperation -> "UnsupportedOperation"
   | `PatternMismatch -> "PatternMismatch"
+  | `EmptyInput -> "EmptyInput"
 ;;
 
 type 'a binop =
@@ -85,7 +87,7 @@ module Env (M : FailMonad) = struct
 end
 
 module Interpret (M : FailMonad) : sig
-  val run : expr -> (value, ierror) M.t
+  val run : expr list -> (value, ierror) M.t
 end = struct
   open M
   open Env (M)
@@ -250,9 +252,26 @@ end = struct
       return @@ VTuple list
   ;;
 
+  let run_expr env expr : ((string, value, 'a) Base.Map.t * value, ierror) t =
+    let* value = eval expr env [] in
+    match expr with
+    | ELet (name, _) | ELetIn (name, _, _) | ELetRec (name, _) | ELetRecIn (name, _, _) ->
+      let* env = extend env [ name, value ] in
+      return (env, value)
+    | _ -> return (env, value)
+  ;;
+
   let run program =
-    let env = empty in
-    eval program env []
+    let rec helper env = function
+      | [] -> fail `EmptyInput
+      | hd :: [] ->
+        let* _, value = run_expr env hd in
+        return value
+      | hd :: tl ->
+        let* env, _ = run_expr env hd in
+        helper env tl
+    in
+    helper empty program
   ;;
 end
 
