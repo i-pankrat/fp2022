@@ -277,6 +277,9 @@ let%test _ =
   | _ -> false
 ;;
 
+(* Tests for interpretator *)
+
+(* (1 + 1) * (5 - 2) * (42 / 6) *)
 let test =
   EApply
     ( EApply
@@ -295,6 +298,7 @@ let%test _ =
   | _ -> false
 ;;
 
+(* Increment function *)
 let test =
   ELetIn
     ( "inc"
@@ -308,9 +312,18 @@ let%test _ =
   | _ -> false
 ;;
 
+(* Sum of two variables *)
+let test =
+  ELetIn
+    ( "sum"
+    , EFun (PVar "a", EFun (PVar "b", EApply (EApply (EBinOp Plus, EVar "a"), EVar "b")))
+    , EApply (EApply (EVar "sum", EConst (CInt 2)), EConst (CInt 3)) )
+;;
+
+(* Sum of the first n natural numbers *)
 let test =
   ELetRecIn
-    ( "sum"
+    ( "sumn"
     , EFun
         ( PVar "x"
         , EIfThenElse
@@ -319,17 +332,18 @@ let test =
             , EApply
                 ( EApply (EBinOp Plus, EVar "x")
                 , EApply
-                    (EVar "sum", EApply (EApply (EBinOp Minus, EVar "x"), EConst (CInt 1)))
-                ) ) )
-    , EApply (EVar "sum", EConst (CInt 2)) )
+                    ( EVar "sumn"
+                    , EApply (EApply (EBinOp Minus, EVar "x"), EConst (CInt 1)) ) ) ) )
+    , EApply (EVar "sumn", EConst (CInt 100)) )
 ;;
 
 let%test _ =
   match InterpretResult.run test with
-  | Base.Result.Ok (VInt 3) -> true
+  | Base.Result.Ok (VInt 5050) -> true
   | _ -> false
 ;;
 
+(* Fibonacci function *)
 let test =
   ELetRecIn
     ( "fib"
@@ -347,15 +361,16 @@ let test =
                 , EApply
                     (EVar "fib", EApply (EApply (EBinOp Minus, EVar "n"), EConst (CInt 2)))
                 ) ) )
-    , EApply (EVar "fib", EConst (CInt 6)) )
+    , EApply (EVar "fib", EConst (CInt 15)) )
 ;;
 
 let%test _ =
   match InterpretResult.run test with
-  | Base.Result.Ok (VInt 13) -> true
+  | Base.Result.Ok (VInt 987) -> true
   | _ -> false
 ;;
 
+(* Factorial function *)
 let test =
   ELetRecIn
     ( "fac"
