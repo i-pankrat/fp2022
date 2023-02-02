@@ -483,3 +483,46 @@ let%expect_test _ =
   print_string (interprete_eval_result show_value test);
   [%expect {| (VList [(VInt 2); (VInt 4); (VInt 6)]) |}]
 ;;
+
+(* List.fold function *)
+let test =
+  [ ELetRec
+      ( "list_fold"
+      , EFun
+          ( PVar "list"
+          , EFun
+              ( PVar "acc"
+              , EFun
+                  ( PVar "f"
+                  , EMatch
+                      ( EVar "list"
+                      , [ PConst CNil, EVar "acc"
+                        ; ( PCons (PVar "head", PVar "tail")
+                          , EApply
+                              ( EApply
+                                  ( EApply (EVar "list_fold", EVar "tail")
+                                  , EApply (EApply (EVar "f", EVar "acc"), EVar "head") )
+                              , EVar "f" ) )
+                        ] ) ) ) ) )
+  ; ELet
+      ( "list_sum"
+      , EApply
+          ( EApply
+              ( EApply
+                  ( EVar "list_fold"
+                  , EList
+                      ( EConst (CInt 1)
+                      , EList (EConst (CInt 2), EList (EConst (CInt 3), EConst CNil)) ) )
+              , EConst (CInt 0) )
+          , EFun
+              ( PVar "accum"
+              , EFun (PVar "x", EApply (EApply (EBinOp Plus, EVar "accum"), EVar "x")) )
+          ) )
+  ]
+;;
+
+let%test _ =
+  match InterpretResult.run test with
+  | Base.Result.Ok (VInt 6) -> true
+  | _ -> false
+;;
