@@ -309,17 +309,18 @@ let test =
 ;;
 
 let%test _ =
-  match InterpretResult.run test with
+  match InterpretResult.run [ test ] with
   | Base.Result.Ok (VInt 42) -> true
   | _ -> false
 ;;
 
 (* Increment function *)
 let test =
-  ELetIn
-    ( "inc"
-    , EFun (PVar "x", EApply (EApply (EBinOp Plus, EConst (CInt 1)), EVar "x"))
-    , EApply (EVar "inc", EConst (CInt 5)) )
+  [ ELetIn
+      ( "inc"
+      , EFun (PVar "x", EApply (EApply (EBinOp Plus, EConst (CInt 1)), EVar "x"))
+      , EApply (EVar "inc", EConst (CInt 5)) )
+  ]
 ;;
 
 let%test _ =
@@ -330,27 +331,29 @@ let%test _ =
 
 (* Sum of two variables *)
 let test =
-  ELetIn
-    ( "sum"
-    , EFun (PVar "a", EFun (PVar "b", EApply (EApply (EBinOp Plus, EVar "a"), EVar "b")))
-    , EApply (EApply (EVar "sum", EConst (CInt 2)), EConst (CInt 3)) )
+  [ ELetIn
+      ( "sum"
+      , EFun (PVar "a", EFun (PVar "b", EApply (EApply (EBinOp Plus, EVar "a"), EVar "b")))
+      , EApply (EApply (EVar "sum", EConst (CInt 2)), EConst (CInt 3)) )
+  ]
 ;;
 
 (* Sum of the first n natural numbers *)
 let test =
-  ELetRecIn
-    ( "sumn"
-    , EFun
-        ( PVar "x"
-        , EIfThenElse
-            ( EApply (EApply (EBinOp Eq, EConst (CInt 1)), EVar "x")
-            , EConst (CInt 1)
-            , EApply
-                ( EApply (EBinOp Plus, EVar "x")
-                , EApply
-                    ( EVar "sumn"
-                    , EApply (EApply (EBinOp Minus, EVar "x"), EConst (CInt 1)) ) ) ) )
-    , EApply (EVar "sumn", EConst (CInt 100)) )
+  [ ELetRecIn
+      ( "sumn"
+      , EFun
+          ( PVar "x"
+          , EIfThenElse
+              ( EApply (EApply (EBinOp Eq, EConst (CInt 1)), EVar "x")
+              , EConst (CInt 1)
+              , EApply
+                  ( EApply (EBinOp Plus, EVar "x")
+                  , EApply
+                      ( EVar "sumn"
+                      , EApply (EApply (EBinOp Minus, EVar "x"), EConst (CInt 1)) ) ) ) )
+      , EApply (EVar "sumn", EConst (CInt 100)) )
+  ]
 ;;
 
 let%test _ =
@@ -361,23 +364,24 @@ let%test _ =
 
 (* Fibonacci function *)
 let test =
-  ELetRecIn
-    ( "fib"
-    , EFun
-        ( PVar "n"
-        , EIfThenElse
-            ( EApply (EApply (EBinOp Gtq, EConst (CInt 1)), EVar "n")
-            , EConst (CInt 1)
-            , EApply
-                ( EApply
-                    ( EBinOp Plus
-                    , EApply
-                        ( EVar "fib"
-                        , EApply (EApply (EBinOp Minus, EVar "n"), EConst (CInt 1)) ) )
-                , EApply
-                    (EVar "fib", EApply (EApply (EBinOp Minus, EVar "n"), EConst (CInt 2)))
-                ) ) )
-    , EApply (EVar "fib", EConst (CInt 15)) )
+  [ ELetRecIn
+      ( "fib"
+      , EFun
+          ( PVar "n"
+          , EIfThenElse
+              ( EApply (EApply (EBinOp Gtq, EConst (CInt 1)), EVar "n")
+              , EConst (CInt 1)
+              , EApply
+                  ( EApply
+                      ( EBinOp Plus
+                      , EApply
+                          ( EVar "fib"
+                          , EApply (EApply (EBinOp Minus, EVar "n"), EConst (CInt 1)) ) )
+                  , EApply
+                      ( EVar "fib"
+                      , EApply (EApply (EBinOp Minus, EVar "n"), EConst (CInt 2)) ) ) ) )
+      , EApply (EVar "fib", EConst (CInt 15)) )
+  ]
 ;;
 
 let%test _ =
@@ -388,21 +392,22 @@ let%test _ =
 
 (* Factorial function *)
 let test =
-  ELetRecIn
-    ( "fac"
-    , EFun
-        ( PVar "n"
-        , EIfThenElse
-            ( EApply (EApply (EBinOp Eq, EConst (CInt 1)), EVar "n")
-            , EConst (CInt 1)
-            , EApply
-                ( EApply
-                    ( EBinOp Mult
-                    , EApply
-                        ( EVar "fac"
-                        , EApply (EApply (EBinOp Minus, EVar "n"), EConst (CInt 1)) ) )
-                , EVar "n" ) ) )
-    , EApply (EVar "fac", EConst (CInt 5)) )
+  [ ELetRecIn
+      ( "fac"
+      , EFun
+          ( PVar "n"
+          , EIfThenElse
+              ( EApply (EApply (EBinOp Eq, EConst (CInt 1)), EVar "n")
+              , EConst (CInt 1)
+              , EApply
+                  ( EApply
+                      ( EBinOp Mult
+                      , EApply
+                          ( EVar "fac"
+                          , EApply (EApply (EBinOp Minus, EVar "n"), EConst (CInt 1)) ) )
+                  , EVar "n" ) ) )
+      , EApply (EVar "fac", EConst (CInt 5)) )
+  ]
 ;;
 
 let%test _ =
@@ -413,31 +418,32 @@ let%test _ =
 
 (* Sum of the list *)
 let test =
-  ELetIn
-    ( "list_sum"
-    , EFun
-        ( PVar "list"
-        , ELetRecIn
-            ( "helper"
-            , EFun
-                ( PVar "x"
-                , EFun
-                    ( PVar "acc"
-                    , EMatch
-                        ( EVar "x"
-                        , [ PConst CNil, EVar "acc"
-                          ; ( PCons (PVar "head", PVar "tail")
-                            , EApply
-                                ( EApply (EVar "helper", EVar "tail")
-                                , EApply (EApply (EBinOp Plus, EVar "acc"), EVar "head")
-                                ) )
-                          ] ) ) )
-            , EApply (EApply (EVar "helper", EVar "list"), EConst (CInt 0)) ) )
-    , EApply
-        ( EVar "list_sum"
-        , EList
-            ( EConst (CInt 1)
-            , EList (EConst (CInt 2), EList (EConst (CInt 3), EConst CNil)) ) ) )
+  [ ELetIn
+      ( "list_sum"
+      , EFun
+          ( PVar "list"
+          , ELetRecIn
+              ( "helper"
+              , EFun
+                  ( PVar "x"
+                  , EFun
+                      ( PVar "acc"
+                      , EMatch
+                          ( EVar "x"
+                          , [ PConst CNil, EVar "acc"
+                            ; ( PCons (PVar "head", PVar "tail")
+                              , EApply
+                                  ( EApply (EVar "helper", EVar "tail")
+                                  , EApply (EApply (EBinOp Plus, EVar "acc"), EVar "head")
+                                  ) )
+                            ] ) ) )
+              , EApply (EApply (EVar "helper", EVar "list"), EConst (CInt 0)) ) )
+      , EApply
+          ( EVar "list_sum"
+          , EList
+              ( EConst (CInt 1)
+              , EList (EConst (CInt 2), EList (EConst (CInt 3), EConst CNil)) ) ) )
+  ]
 ;;
 
 let%test _ =
@@ -448,27 +454,29 @@ let%test _ =
 
 (* List.map function *)
 let test =
-  ELetRecIn
-    ( "list_map"
-    , EFun
-        ( PVar "f"
-        , EFun
-            ( PVar "list"
-            , EMatch
-                ( EVar "list"
-                , [ PConst CNil, EConst CNil
-                  ; ( PCons (PVar "head", PVar "tail")
-                    , EApply
-                        ( EApply (EBinOp ConsConcat, EApply (EVar "f", EVar "head"))
-                        , EApply (EApply (EVar "list_map", EVar "f"), EVar "tail") ) )
-                  ] ) ) )
-    , EApply
-        ( EApply
-            ( EVar "list_map"
-            , EFun (PVar "x", EApply (EApply (EBinOp Mult, EVar "x"), EConst (CInt 2))) )
-        , EList
-            ( EConst (CInt 1)
-            , EList (EConst (CInt 2), EList (EConst (CInt 3), EConst CNil)) ) ) )
+  [ ELetRecIn
+      ( "list_map"
+      , EFun
+          ( PVar "f"
+          , EFun
+              ( PVar "list"
+              , EMatch
+                  ( EVar "list"
+                  , [ PConst CNil, EConst CNil
+                    ; ( PCons (PVar "head", PVar "tail")
+                      , EApply
+                          ( EApply (EBinOp ConsConcat, EApply (EVar "f", EVar "head"))
+                          , EApply (EApply (EVar "list_map", EVar "f"), EVar "tail") ) )
+                    ] ) ) )
+      , EApply
+          ( EApply
+              ( EVar "list_map"
+              , EFun (PVar "x", EApply (EApply (EBinOp Mult, EVar "x"), EConst (CInt 2)))
+              )
+          , EList
+              ( EConst (CInt 1)
+              , EList (EConst (CInt 2), EList (EConst (CInt 3), EConst CNil)) ) ) )
+  ]
 ;;
 
 let%expect_test _ =
