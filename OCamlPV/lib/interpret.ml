@@ -268,13 +268,10 @@ module InterpretResult = Interpret (struct
   let ( let* ) monad f = bind monad ~f
 end)
 
-(* Tests for interpretator *)
-let test = EApply (EFun (PVar "x", EVar "x"), EConst (CInt 5))
-
-let%test _ =
+let interprete_eval_result fm test =
   match InterpretResult.run test with
-  | Base.Result.Ok (VInt 5) -> true
-  | _ -> false
+  | Result.Error e -> "Error: " ^ show_ierror e
+  | Result.Ok ast -> fm ast
 ;;
 
 (* Tests for interpretator *)
@@ -393,4 +390,69 @@ let%test _ =
   match InterpretResult.run test with
   | Base.Result.Ok (VInt 120) -> true
   | _ -> false
+;;
+
+(* Sum of the list *)
+let test =
+  ELetIn
+    ( "list_sum"
+    , EFun
+        ( PVar "list"
+        , ELetRecIn
+            ( "helper"
+            , EFun
+                ( PVar "x"
+                , EFun
+                    ( PVar "acc"
+                    , EMatch
+                        ( EVar "x"
+                        , [ PConst CNil, EVar "acc"
+                          ; ( PCons (PVar "head", PVar "tail")
+                            , EApply
+                                ( EApply (EVar "helper", EVar "tail")
+                                , EApply (EApply (EBinOp Plus, EVar "acc"), EVar "head")
+                                ) )
+                          ] ) ) )
+            , EApply (EApply (EVar "helper", EVar "list"), EConst (CInt 0)) ) )
+    , EApply
+        ( EVar "list_sum"
+        , EList
+            ( EConst (CInt 1)
+            , EList (EConst (CInt 2), EList (EConst (CInt 3), EConst CNil)) ) ) )
+;;
+
+let%test _ =
+  match InterpretResult.run test with
+  | Base.Result.Ok (VInt 6) -> true
+  | _ -> false
+;;
+
+(* List.map function *)
+let test =
+  ELetRecIn
+    ( "list_map"
+    , EFun
+        ( PVar "f"
+        , EFun
+            ( PVar "list"
+            , EMatch
+                ( EVar "list"
+                , [ PConst CNil, EConst CNil
+                  ; ( PCons (PVar "head", PVar "tail")
+                    , EApply
+                        ( EApply (EBinOp ConsConcat, EApply (EVar "f", EVar "head"))
+                        , EApply (EApply (EVar "list_map", EVar "f"), EVar "tail") ) )
+                  ] ) ) )
+    , EApply
+        ( EApply
+            ( EVar "list_map"
+            , EFun (PVar "x", EApply (EApply (EBinOp Mult, EVar "x"), EConst (CInt 2))) )
+        , EList
+            ( EConst (CInt 1)
+            , EList (EConst (CInt 2), EList (EConst (CInt 3), EConst CNil)) ) ) )
+;;
+
+let%expect_test _ =
+  print_string (interprete_eval_result show_value test);
+  [%expect {| (VList [(VInt 2); (VInt 4); (VInt 6)]) |}]
 ;;
