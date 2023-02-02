@@ -52,3 +52,5 @@ and expr =
   | EList of expr * expr
   | ETuple of expr list
 [@@deriving show { with_path = false }]
+
+and statements = expr list
