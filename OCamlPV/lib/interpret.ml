@@ -17,11 +17,19 @@ end
 
 type ierror =
   [ `DivisionByZero
-  | `UnboudnValue
+  | `UnboundValue of string
   | `TypeMismatch
   | `UnsupportedOperation
   | `PatternMismatch
   ]
+
+let show_ierror : ierror -> string = function
+  | `DivisionByZero -> "DivisionByZero"
+  | `UnboundValue s -> "UnboudnValue: " ^ s
+  | `TypeMismatch -> "TypeMismatch"
+  | `UnsupportedOperation -> "UnsupportedOperation"
+  | `PatternMismatch -> "PatternMismatch"
+;;
 
 type 'a binop =
   | EmptyBinOp of bin_op
