@@ -110,7 +110,7 @@ end = struct
        | Mod, VInt _
        | And, VBool _
        | Or, VBool _
-       | ConsConcat, VList _
+       | ConsConcat, _
        | Eq, _
        | Neq, _
        | Gt, _
@@ -129,7 +129,8 @@ end = struct
        | Mod, VInt i1, VInt i2 -> return @@ cvint (i1 % i2)
        | And, VBool b1, VBool b2 -> return @@ cvbool (b1 && b2)
        | Or, VBool b1, VBool b2 -> return @@ cvbool (b1 || b2)
-       | ConsConcat, _, _ -> failwith "TODO1"
+       | ConsConcat, _, VList list -> return @@ VList (farg :: list)
+       | ConsConcat, _, VNil -> return @@ VList (farg :: [])
        | op, VInt i1, VInt i2 -> return @@ cvbool @@ (eval_comparison op) i1 i2
        | op, VBool b1, VBool b2 -> return @@ cvbool @@ (eval_comparison op) b1 b2
        | op, VString s1, VString s2 -> return @@ cvbool @@ (eval_comparison op) s1 s2
@@ -177,6 +178,7 @@ end = struct
        | CInt i -> return @@ cvint i
        | CBool b -> return @@ cvbool b
        | CString s -> return @@ cvstring s
+       | CNil -> return VNil
        | _ -> failwith "TODO3")
     | EFun (pat, expr) -> return @@ cvfun pat expr substs
     | EVar var -> find env var
@@ -221,6 +223,31 @@ end = struct
       let* evaled1 = eval expr1 env [] in
       let* env = extend env [ name, evaled1 ] in
       eval expr2 env []
+    | EList (h, t) ->
+      let* evaled = eval h env [] in
+      let rec helper acc expr =
+        match expr with
+        | EConst CNil -> acc
+        | EList (hd, tl) ->
+          let* acc = acc in
+          let* evaled = eval hd env [] in
+          helper (return (evaled :: acc)) tl
+        | _ ->
+          let* acc = acc in
+          let* evaled = eval expr env [] in
+          return (evaled :: acc)
+      in
+      let* res = helper (return [ evaled ]) t in
+      let res = VList (List.rev res) in
+      return res
+    | ETuple els ->
+      let* list =
+        List.fold els ~init:(return []) ~f:(fun l e ->
+          let* l = l in
+          let* evaled = eval e env [] in
+          return @@ (evaled :: l))
+      in
+      return @@ VTuple list
   ;;
 
   let run program =
