@@ -57,9 +57,6 @@ let cvstring s = VString s
 let cvfun p e subst = VFun (p, e, subst)
 let cvbinop op = VBinOp op
 
-type environment = (id, value, String.comparator_witness) Map.t
-(* ((id, value, String.comparator_witness) Map.t  ? *)
-
 module Env (M : FailMonad) = struct
   open M
 
@@ -144,11 +141,33 @@ end = struct
     | PVar name, value -> return [ name, value ]
     | PConst const, cvalue ->
       (match const, cvalue with
-       | CBool b1, VBool b2 when Poly.( = ) b1 b2 -> return []
-       | CInt i1, VInt i2 when Poly.( = ) i1 i2 -> return []
-       | CString s1, VString s2 when Poly.( = ) s1 s2 -> return []
+       | CBool e1, VBool e2 when Poly.( = ) e1 e2 -> return []
+       | CInt e1, VInt e2 when Poly.( = ) e1 e2 -> return []
+       | CString e1, VString e2 when Poly.( = ) e1 e2 -> return []
+       | CUnit, VUnit -> return []
+       | CNil, VList v ->
+         (match v with
+          | [] -> return []
+          | _ -> fail `PatternMismatch)
        | _ -> fail `PatternMismatch)
-    | _ -> fail `PatternMismatch (* Списки, кортежи нужно добавить ешё*)
+    | (PCons _ as pl), VList vl ->
+      (match pl, vl with
+       | PCons (h, t), hd :: tl ->
+         let* evaledhd = eval_pattern (h, hd) in
+         let* evaledtl = eval_pattern (t, VList tl) in
+         return @@ evaledhd @ evaledtl
+       | _ -> fail `PatternMismatch)
+    | PTuple pt, VTuple vt ->
+      let pat =
+        List.fold2 pt vt ~init:(return []) ~f:(fun acc p v ->
+          let* evaled = eval_pattern (p, v) in
+          let* acc = acc in
+          return (evaled @ acc))
+      in
+      (match pat with
+       | Ok res -> res
+       | Unequal_lengths -> fail `PatternMismatch)
+    | _ -> fail `PatternMismatch
   ;;
 
   let rec eval expr env substs =
