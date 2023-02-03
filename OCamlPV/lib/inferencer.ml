@@ -449,9 +449,9 @@ let infer =
 ;;
 
 let w e = Result.map (run (infer TypeEnv.empty e)) ~f:snd
-
-(* Unification tests *)
 let unify = Subst.unify
+
+(** Unification tests *)
 
 let run_subst subst =
   match R.run subst with
@@ -485,12 +485,14 @@ let%expect_test _ =
   [%expect {| Error |}]
 ;;
 
-(* Infer tests *)
+(** Infer tests *)
 
 let run_infer = function
   | Result.Error _ -> Format.printf "Error%!"
   | Result.Ok typed -> Format.printf "%a%!" Pprintast.pp_typ typed
 ;;
+
+(** Infer constant type*)
 
 let%expect_test _ =
   let open Ast in
@@ -510,6 +512,8 @@ let%expect_test _ =
   [%expect {| bool |}]
 ;;
 
+(** Infer condition statement type *)
+
 let%expect_test _ =
   let open Ast in
   let _ =
@@ -518,6 +522,8 @@ let%expect_test _ =
   in
   [%expect {| int |}]
 ;;
+
+(** Infer binary operation type *)
 
 let%expect_test _ =
   let open Ast in
@@ -537,13 +543,12 @@ let%expect_test _ =
   [%expect {| bool |}]
 ;;
 
+(** Infer fun type *)
+
 let%expect_test _ =
   let open Ast in
   let _ =
-    let e =
-      (* fun x -> x + 1 *)
-      EFun (PVar "x", EApply (EApply (EBinOp Mult, EVar "x"), EVar "x"))
-    in
+    let e = EFun (PVar "x", EApply (EApply (EBinOp Mult, EVar "x"), EVar "x")) in
     w e |> run_infer
   in
   [%expect {| (int -> int) |}]
@@ -553,7 +558,6 @@ let%expect_test _ =
   let open Ast in
   let _ =
     let e =
-      (* fun [a, b] -> a + b *)
       EFun
         ( PCons (PVar "a", PCons (PVar "b", PConst CNil))
         , EApply (EApply (EBinOp Mult, EVar "a"), EVar "b") )
@@ -562,10 +566,8 @@ let%expect_test _ =
   in
   [%expect {| (int list -> int) |}]
 ;;
-;;
 
-let x = 5 * 5 in
-2 * x
+(** Infer "let in" type *)
 
 let%expect_test _ =
   let open Ast in
@@ -581,11 +583,12 @@ let%expect_test _ =
   [%expect {| int |}]
 ;;
 
+(** Infer "let" type *)
+
 let%expect_test _ =
   let open Ast in
   let _ =
     let e =
-      (* let inc x = x + 1 *)
       ELet
         ("inc", EFun (PVar "x", EApply (EApply (EBinOp Plus, EVar "x"), EConst (CInt 1))))
     in
@@ -594,11 +597,12 @@ let%expect_test _ =
   [%expect {| (int -> int) |}]
 ;;
 
+(** Infer fuctorial function type *)
+
 let%expect_test _ =
   let open Ast in
   let _ =
     let e =
-      (* let rec fac n = if n > 0 then n * fac (n - 1) else 1 *)
       ELetRec
         ( "fac"
         , EFun
@@ -617,11 +621,12 @@ let%expect_test _ =
   [%expect {| (int -> int) |}]
 ;;
 
+(** Infer "let rec in" type *)
+
 let%expect_test _ =
   let open Ast in
   let _ =
     let e =
-      (* let rec fac n = if n > 0 then n * fac (n - 1) else 1 in fac 5 *)
       ELetRecIn
         ( "fac"
         , EFun
@@ -641,6 +646,8 @@ let%expect_test _ =
   [%expect {| int |}]
 ;;
 
+(** Infer match type *)
+
 let%expect_test _ =
   let open Ast in
   let _ =
@@ -654,6 +661,10 @@ let%expect_test _ =
   in
   [%expect {| int |}]
 ;;
+
+(** Infer list type *)
+
+(** Some test funcitons to type inferencer test*)
 
 let%expect_test _ =
   let open Ast in
