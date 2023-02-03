@@ -528,6 +528,11 @@ let%expect_test _ =
 ;;
 
 let%expect_test _ =
+  print_string (interprete_parse_result show_pattern ppattern "h :: t");
+  [%expect {| (PCons ((PVar "h"), (PVar "t"))) |}]
+;;
+
+let%expect_test _ =
   print_string (interprete_parse_result show_pattern ppattern "(a, b, c, d)");
   [%expect {|
     (PTuple [(PVar "a"); (PVar "b"); (PVar "c"); (PVar "d")])|}]
@@ -677,6 +682,42 @@ let%expect_test _ =
 let%expect_test _ =
   print_string (interprete_parse_result show_expr pexpr "fun x -> fun y -> x");
   [%expect {| (EFun ((PVar "x"), (EFun ((PVar "y"), (EVar "x"))))) |}]
+;;
+
+(** Test list *)
+
+let%expect_test _ =
+  print_string (interprete_parse_result show_expr pexpr "[a; b; c; d]");
+  [%expect
+    {|
+    (EList ((EVar "a"),
+       (EList ((EVar "b"),
+          (EList ((EVar "c"), (EList ((EVar "d"), (EConst CNil)))))))
+       )) |}]
+;;
+
+let%expect_test _ =
+  print_string (interprete_parse_result show_expr pexpr "[[1]; [2]; [3]; [4]]");
+  [%expect
+    {|
+    (EList ((EList ((EConst (CInt 1)), (EConst CNil))),
+       (EList ((EList ((EConst (CInt 2)), (EConst CNil))),
+          (EList ((EList ((EConst (CInt 3)), (EConst CNil))),
+             (EList ((EList ((EConst (CInt 4)), (EConst CNil))), (EConst CNil)))
+             ))
+          ))
+       )) |}]
+;;
+
+(** Test tuple *)
+
+let%expect_test _ =
+  print_string (interprete_parse_result show_expr pexpr "((1, 2), (3, 4))");
+  [%expect
+    {|
+    (ETuple
+       [(ETuple [(EConst (CInt 1)); (EConst (CInt 2))]);
+         (ETuple [(EConst (CInt 3)); (EConst (CInt 4))])]) |}]
 ;;
 
 (** Test let and let rec *)
