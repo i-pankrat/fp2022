@@ -55,13 +55,14 @@ let pparens p = pstoken "(" *> p <* pstoken ")"
 let pquotes p = pstoken "\"" *> p <* pstoken "\""
 let pbrackets p = pstoken "[" *> p <* pstoken "]"
 
-(* Const constructors *)
+(** Const constructors *)
+
 let cint x = CInt x
 let cbool x = CBool x
 let cstring x = CString x
 let cnill = CNil
 
-(* Const parsers *)
+(** Const parsers *)
 
 let psign =
   choice [ pstoken "+" *> return 1; pstoken "-" *> return (-1); pstoken "" *> return 1 ]
@@ -168,7 +169,8 @@ let pack =
 
 let ppattern = pack.pattern pack
 
-(* expr constructors *)
+(** Expr constructors *)
+
 let econd i t e = EIfThenElse (i, t, e)
 let ematch c pl = EMatch (c, pl)
 let elet name body = ELet (name, body)
@@ -492,7 +494,7 @@ let%expect_test _ =
   [%expect {| CUnit |}]
 ;;
 
-(* Parse patterns tests *)
+(** Parse patterns tests *)
 
 let%expect_test _ =
   print_string (interprete_parse_result show_pattern ppattern "4");
@@ -583,9 +585,9 @@ let%expect_test _ =
        )) |}]
 ;;
 
-(* EXPR TESTS *)
+(** Expression tests *)
 
-(* Test binary operations *)
+(** Test binary operations *)
 
 let%expect_test _ =
   print_string (interprete_parse_result show_expr pexpr "a + b");
@@ -641,7 +643,7 @@ let%expect_test _ =
         (EApply ((EApply ((EBinOp ConsConcat), (EConst (CInt 1)))), (EVar "list"))) |}]
 ;;
 
-(* Test application *)
+(** Test application *)
 
 let%expect_test _ =
   print_string (interprete_parse_result show_expr (pack.eapply pack) "f x y");
@@ -649,7 +651,7 @@ let%expect_test _ =
         (EApply ((EApply ((EVar "f"), (EVar "x"))), (EVar "y"))) |}]
 ;;
 
-(* Test condition statement *)
+(** Test condition statement *)
 
 let%expect_test _ =
   print_string (interprete_parse_result show_expr pexpr "if a then b else c");
@@ -666,7 +668,7 @@ let%expect_test _ =
            (EConst (CInt 1)), (EVar "n"))) |}]
 ;;
 
-(* Test pattern matching *)
+(** Test pattern matching *)
 
 let%expect_test _ =
   print_string (interprete_parse_result show_expr pexpr "match x with | a -> b | _ -> c");
@@ -675,14 +677,14 @@ let%expect_test _ =
         (EMatch ((EVar "x"), [((PVar "a"), (EVar "b")); (PWild, (EVar "c"))])) |}]
 ;;
 
-(* Test fun *)
+(** Test fun *)
 
 let%expect_test _ =
   print_string (interprete_parse_result show_expr pexpr "fun x -> fun y -> x");
   [%expect {| (EFun ((PVar "x"), (EFun ((PVar "y"), (EVar "x"))))) |}]
 ;;
 
-(* Test let and let rec *)
+(** Test let and let rec *)
 
 let%expect_test _ =
   print_string (interprete_parse_result show_expr pexpr "let id x = x");
