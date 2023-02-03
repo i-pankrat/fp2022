@@ -775,69 +775,93 @@ let%expect_test _ =
        )) |}]
 ;;
 
-(* Test let in and let rec in *)
-
+(* TODO: fix braces at application *)
 let%expect_test _ =
-  print_string (interprete_parse_result show_expr pexpr "let square = 6 in 6");
-  [%expect {|
-    testing|}]
-;;
-
-(* let%expect_test _ =
   print_string
     (interprete_parse_result
        show_expr
        pexpr
-       "let list_reverse init = let rec helper acc list = match list with | [] -> acc | \
-        h :: t -> helper (h :: acc) t in helper [] init");
-  [%expect {|
-    test |}]
-;; *)
-
-(* let%expect_test _ =
-  print_string
-    (interprete_parse_result
-       show_expr
-       pexpr
-       "let rec sum_of_first_n_naturals n = if n == 1 then 1 else n * \
-        (sum_of_first_n_naturals (n - 1))");
-  [%expect {|
-    test|}]
-;; *)
-
-(* let%expect_test _ =
-  print_string
-    (interprete_parse_result
-       show_expr
-       pexpr
-       "let rec fib n = fun acc -> match n with | 1 -> acc | _ -> fib (n - (1)) (acc * n)");
+       "let rec sumn n = if n = 1 then 1 else n + (sumn (n - 1))");
   [%expect
     {|
-    (ELetRec ("fib", (EVar "n"),
-       (EFun ((EVar "acc"),
-          (EMatch ((EVar "n"),
-             [((EPatterns (PConst (CInt 1))), (EVar "acc"));
-               ((EPatterns PWild),
-                (EApply (
-                   (EApply ((EVar "fib"),
-                      (EBinOp (Minus, (EVar "n"), (EConst (CInt 1)))))),
-                   (EBinOp (Mult, (EVar "acc"), (EVar "n"))))))
-               ]
+    (ELetRec ("sumn",
+       (EFun ((PVar "n"),
+          (EIfThenElse (
+             (EApply ((EApply ((EBinOp Eq), (EVar "n"))), (EConst (CInt 1)))),
+             (EConst (CInt 1)),
+             (EApply ((EApply ((EBinOp Plus), (EVar "n"))),
+                (EApply ((EVar "sumn"),
+                   (EApply ((EApply ((EBinOp Minus), (EVar "n"))),
+                      (EConst (CInt 1))))
+                   ))
+                ))
              ))
           ))
        ))|}]
-;; *)
+;;
 
-(* let%expect_test _ =
-  print_string (interprete_parse_result show_expr pexpr "let x = a in z");
-  [%expect {| (ELet ("x", (EVar "a"), (EVar "z")))|}]
-;; *)
-
-(* FIX THIS CASE *)
-(* let%expect_test _ =
-  print_string (interprete_parse_result show_expr pexpr "let deinc x = x - (1)");
+(* TODO: fix braces at application *)
+let%expect_test _ =
+  print_string
+    (interprete_parse_result
+       show_expr
+       pexpr
+       "let rec fib n = fun acc -> \n\
+       \  match n with \n\
+       \    | 1 -> acc \n\
+       \    | _ -> (fib (n - (1)) (acc * n))");
   [%expect
-    {| (ELet ("deinc", (EVar "x"), (EBinOp (Minus, (EVar "x"), (EConst (CInt 1)))))) |}]
+    {|
+    (ELetRec ("fib",
+       (EFun ((PVar "n"),
+          (EFun ((PVar "acc"),
+             (EMatch ((EVar "n"),
+                [((PConst (CInt 1)), (EVar "acc"));
+                  (PWild,
+                   (EApply (
+                      (EApply ((EVar "fib"),
+                         (EApply ((EApply ((EBinOp Minus), (EVar "n"))),
+                            (EConst (CInt 1))))
+                         )),
+                      (EApply ((EApply ((EBinOp Mult), (EVar "acc"))), (EVar "n")
+                         ))
+                      )))
+                  ]
+                ))
+             ))
+          ))
+       )) |}]
+;;
+
+(** Test let in and let rec in *)
+
+(* TODO: fix braces at application *)
+let%expect_test _ =
+  print_string
+    (interprete_parse_result
+       show_expr
+       pexpr
+       "let listreverse init = \n\
+       \  match list with \n\
+       \    | [] -> acc \n\
+       \    | h :: t -> (helper (h :: acc) t)");
+  [%expect
+    {|
+    (ELet ("listreverse",
+       (EFun ((PVar "init"),
+          (EMatch ((EVar "list"),
+             [((PConst CNil), (EVar "acc"));
+               ((PCons ((PVar "h"), (PVar "t"))),
+                (EApply (
+                   (EApply ((EVar "helper"),
+                      (EApply ((EApply ((EBinOp ConsConcat), (EVar "h"))),
+                         (EVar "acc")))
+                      )),
+                   (EVar "t"))))
+               ]
+             ))
+          ))
+       )) |}]
 ;;
 
 let%expect_test _ =
