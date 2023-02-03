@@ -53,4 +53,4 @@ and expr =
   | ETuple of expr list
 [@@deriving show { with_path = false }]
 
-and statements = expr list
+and statements = expr list [@@deriving show { with_path = false }]
