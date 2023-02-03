@@ -867,21 +867,42 @@ let%expect_test _ =
 let%expect_test _ =
   print_string
     (interprete_parse_result
-       show_expr
-       pexpr
-       "let rec map f = fun list -> match list with | [] -> [] | h :: t -> f h :: map f t");
+       show_statements
+       pstatements
+       "let rec map f = fun list -> \n\
+       \  match list with \n\
+       \    | [] -> [] \n\
+       \    | h :: t -> (f h) :: (map f t);;\n\
+        let list = (map (fun x -> x + x) [1; 2; 3])");
   [%expect
     {|
-    (ELetRec ("map", (EVar "f"),
-       (EFun ((EVar "list"),
-          (EMatch ((EVar "list"),
-             [((EPatterns (PConst CNil)), (EConst CNil));
-               ((EPatterns
-                   (PCons ((PVar "h"), (PCons ((PVar "t"), (PConst CNil)))))),
-                (EBinOp (ConsConcat, (EApply ((EVar "f"), (EVar "h"))),
-                   (EApply ((EApply ((EVar "map"), (EVar "f"))), (EVar "t"))))))
-               ]
-             ))
-          ))
-       ))|}]
-;; *)
+    [(ELetRec ("map",
+        (EFun ((PVar "f"),
+           (EFun ((PVar "list"),
+              (EMatch ((EVar "list"),
+                 [((PConst CNil), (EConst CNil));
+                   ((PCons ((PVar "h"), (PVar "t"))),
+                    (EApply (
+                       (EApply ((EBinOp ConsConcat),
+                          (EApply ((EVar "f"), (EVar "h"))))),
+                       (EApply ((EApply ((EVar "map"), (EVar "f"))), (EVar "t")))
+                       )))
+                   ]
+                 ))
+              ))
+           ))
+        ));
+      (ELet ("list",
+         (EApply (
+            (EApply ((EVar "map"),
+               (EFun ((PVar "x"),
+                  (EApply ((EApply ((EBinOp Plus), (EVar "x"))), (EVar "x")))))
+               )),
+            (EList ((EConst (CInt 1)),
+               (EList ((EConst (CInt 2)),
+                  (EList ((EConst (CInt 3)), (EConst CNil)))))
+               ))
+            ))
+         ))
+      ] |}]
+;;
