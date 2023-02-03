@@ -77,47 +77,56 @@ let pcnil = pstoken "[]" *> return CNil
 let pcunit = pstoken "()" *> return CUnit
 let pconst = pcint <|> pcbool <|> pcstring <|> pcnil <|> pcunit
 
-(* Parse ident *)
+(** Parse ident *)
 
 let pIdent =
   empty *> take_while is_ident_symbol
   >>= fun res -> if is_kw res || prohibited res then fail "keyword" else return res
 ;;
 
-(* pattern constructors *)
+(** Pattern constructors *)
+
 let construct_ptuple t = PTuple t
 let construct_pconst c = PConst c
 let construct_pcons h t = PCons (h, t)
-(* Parse patterns *)
+
+(** Parse patterns *)
 
 let ppconst = pconst >>| fun x -> PConst x
 let ppvar = pIdent >>| fun x -> PVar x
 let pwild = pstoken "_" *> return PWild
 
-let rec create_cons = function
+let rec create_cons_dc = function
+  | [] -> failwith "todo"
+  | hd :: [] when equal_pattern hd (PConst CNil) -> PConst CNil
+  | [ f; s ] -> construct_pcons f s
+  | hd :: tl -> construct_pcons hd (create_cons_dc tl)
+;;
+
+let rec create_cons_sc = function
   | [] -> PConst CNil
   | hd :: [] when equal_pattern hd (PConst CNil) -> PConst CNil
-  | hd :: tl -> construct_pcons hd (create_cons tl)
+  | hd :: tl -> construct_pcons hd (create_cons_sc tl)
 ;;
 
-let parse_cons_semicolon parser =
-  create_cons <$> pbrackets @@ sep_by1 (pstoken ";") parser
+let parse_cons_semicolon parser constructor =
+  constructor <$> pbrackets @@ sep_by1 (pstoken ";") parser
 ;;
 
-let parse_cons_doublecolon parser =
+let parse_cons_doublecolon parser constructor =
   lift2
-    (fun a b -> create_cons @@ (a :: b))
+    (fun a b -> constructor @@ (a :: b))
     (parser <* trim @@ pstoken "::")
     (sep_by1 (trim @@ pstoken "::") parser)
 ;;
 
-let parse_tuple_parens parser =
-  construct_ptuple <$> pparens @@ sep_by1 (pstoken ",") parser
+let parse_tuple_parens parser constructor =
+  constructor <$> pparens @@ sep_by1 (pstoken ",") parser
 ;;
 
-let parse_tuple parser =
+let parse_tuple parser constructor =
   lift2
-    (fun a b -> construct_ptuple @@ (a :: b))
+    (fun a b -> constructor @@ (a :: b))
     (parser <* trim @@ pstoken ",")
     (sep_by1 (trim @@ pstoken ",") parser)
 ;;
@@ -148,10 +157,12 @@ let pack =
       [ pack.value pack; pack.tuple_p pack; pack.cons_sc pack ]
   in
   let value _ = ppvar <|> ppconst <|> pwild in
-  let tuple_p pack = fix @@ fun _ -> parse_tuple_parens (parsers pack) in
-  let tuple_wp pack = fix @@ fun _ -> parse_tuple (parsers pack) in
-  let cons_sc pack = fix @@ fun _ -> parse_cons_semicolon (parsers pack) in
-  let cons_dc pack = fix @@ fun _ -> parse_cons_doublecolon (parsers pack) in
+  let tuple_p pack = fix @@ fun _ -> parse_tuple_parens (parsers pack) construct_ptuple in
+  let tuple_wp pack = fix @@ fun _ -> parse_tuple (parsers pack) construct_ptuple in
+  let cons_sc pack = fix @@ fun _ -> parse_cons_semicolon (parsers pack) create_cons_sc in
+  let cons_dc pack =
+    fix @@ fun _ -> parse_cons_doublecolon (parsers pack) create_cons_dc
+  in
   { cons_sc; cons_dc; tuple_p; tuple_wp; value; pattern }
 ;;
 
@@ -168,10 +179,16 @@ let efun id body = EFun (id, body)
 let eapply f a = EApply (f, a)
 let evar x = EVar x
 let ebinop op = EBinOp op
+let elist h t = EList (h, t)
+let etuple t = ETuple t
 
-(* parse expr *)
+(** Parse expr *)
+
 let pevar = evar <$> pIdent
 let peconst = pconst >>| fun x -> EConst x
+let parens_or_not p = p <|> pparens p
+let pargs = many @@ parens_or_not @@ ppattern
+let pargs1 = many @@ parens_or_not @@ ppattern
 
 type edispatch =
   { evalue : edispatch -> expr t
@@ -184,6 +201,8 @@ type edispatch =
   ; ebinop : edispatch -> expr t
   ; efun : edispatch -> expr t
   ; eapply : edispatch -> expr t
+  ; elist : edispatch -> expr t
+  ; etuple : edispatch -> expr t
   ; expr : edispatch -> expr t
   }
 
@@ -200,10 +219,6 @@ let ematch pmatch pexpr =
   lift2 ematch pematch pelines
 ;;
 
-let parens_or_not p = p <|> pparens p
-let pargs = many1 @@ parens_or_not @@ ppattern
-
-(* Upgrade using fold_left *)
 let construct_efun args body =
   let rec helper = function
     | [] -> body
@@ -215,7 +230,7 @@ let construct_efun args body =
 let pefun pexpr =
   lift2
     (fun args expr -> construct_efun args expr)
-    (pstoken "fun" *> pargs)
+    (pstoken "fun" *> pargs1)
     (pstoken "->" *> pexpr)
 ;;
 
@@ -312,15 +327,15 @@ let pack =
   let expr pack =
     choice
       ~failure_msg:"Failed to parse expr"
-      (* We have to a mistake with simaltenious parsing of application and binary operations.
-         Now we have to wrap binary operation in braces to parse it corretly :( *)
       [ letsin pack
       ; lets pack
       ; pack.econdition pack
       ; pack.ebinop pack
       ; pack.eapply pack
       ; pack.efun pack
-      ; pack.ematch pack (* ; letsin pack *)
+      ; pack.ematch pack
+      ; pack.elist pack
+      ; pack.etuple pack
       ]
   in
   let econdition pack =
@@ -374,6 +389,9 @@ let pack =
       @@ choice
            ~failure_msg:"Failed to parse application"
            [ pack.evalue pack
+           ; pack.elist pack
+           ; pack.etuple pack
+           ; pparens @@ pack.efun pack
            ; pparens @@ pack.econdition pack
            ; pparens @@ pack.ematch pack
            ; pparens @@ pack.eapply pack
@@ -397,6 +415,22 @@ let pack =
   let eletin pack = fix @@ fun _ -> eletdecl @@ lets_parsers pack in
   let eletrec pack = fix @@ fun _ -> eletfun @@ lets_parsers pack in
   let eletrecin pack = fix @@ fun _ -> eletdecl @@ lets_parsers pack in
+  let value_parsers pack =
+    choice
+      ~failure_msg:"Failed to parse list"
+      [ pack.evalue pack; pack.etuple pack; pack.elist pack ]
+  in
+  let elist pack =
+    fix
+    @@ fun _ ->
+    let rec create_cons_sc = function
+      | [] -> EConst CNil
+      | hd :: [] when equal_expr hd (EConst CNil) -> EConst CNil
+      | hd :: tl -> elist hd (create_cons_sc tl)
+    in
+    parse_cons_semicolon (value_parsers pack) create_cons_sc
+  in
+  let etuple pack = fix @@ fun _ -> parse_tuple_parens (value_parsers pack) etuple in
   { evalue
   ; econdition
   ; elet
@@ -407,6 +441,8 @@ let pack =
   ; ebinop
   ; efun
   ; eapply
+  ; elist
+  ; etuple
   ; expr
   }
 ;;
