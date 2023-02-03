@@ -448,11 +448,13 @@ let pack =
 ;;
 
 let pexpr = pack.expr pack
+let pstatements = sep_by1 (pstoken ";;") pexpr
 
-(* PARSER TESTS*)
+(** Parser tests *)
+
 let interprete_parse_result fm p str =
   match parse p str with
-  | Result.Error e -> "Error" ^ e
+  | Result.Error e -> Format.sprintf "Error: %s" e
   | Result.Ok ast -> fm ast
 ;;
 
