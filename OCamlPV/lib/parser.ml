@@ -64,9 +64,7 @@ let cnill = CNil
 
 (** Const parsers *)
 
-let psign =
-  choice [ pstoken "+" *> return 1; pstoken "-" *> return (-1); pstoken "" *> return 1 ]
-;;
+let psign = choice [ pparens @@ (pstoken "-" *> return (-1)); pstoken "" *> return 1 ]
 
 let pcint =
   lift2 (fun s v -> cint (s * Int.of_string v)) psign (token @@ take_while1 is_digit)
@@ -458,15 +456,11 @@ let interprete_parse_result fm p str =
   | Result.Ok ast -> fm ast
 ;;
 
-(* Parse const tests *)
+(** Parse const tests *)
+
 let%expect_test _ =
   print_string (interprete_parse_result show_const pconst "42");
   [%expect {| (CInt 42) |}]
-;;
-
-let%expect_test _ =
-  print_string (interprete_parse_result show_const pconst " -42");
-  [%expect {| (CInt -42) |}]
 ;;
 
 let%expect_test _ =
@@ -614,7 +608,6 @@ let%expect_test _ =
         (EApply ((EApply ((EBinOp Minus), (EVar "a"))), (EConst (CInt 1))))|}]
 ;;
 
-(* FIX ME*)
 let%expect_test _ =
   print_string (interprete_parse_result show_expr pexpr "(a - 1)");
   [%expect
@@ -715,7 +708,6 @@ let%expect_test _ =
        )) |}]
 ;;
 
-(* TODO: FIX -1*)
 let%expect_test _ =
   print_string
     (interprete_parse_result
