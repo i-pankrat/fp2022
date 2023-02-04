@@ -840,3 +840,83 @@ let%expect_test _ =
   in
   [%expect {| ('_2 list -> bool) |}]
 ;;
+
+(** Some functions to test inferencer *)
+
+let%expect_test _ =
+  let open Ast in
+  let _ =
+    let e =
+      ELetRec
+        ( "fac"
+        , EFun
+            ( PVar "n"
+            , EIfThenElse
+                ( EApply (EApply (EBinOp Eq, EConst (CInt 1)), EVar "n")
+                , EConst (CInt 1)
+                , EApply
+                    ( EApply
+                        ( EBinOp Mult
+                        , EApply
+                            ( EVar "fac"
+                            , EApply (EApply (EBinOp Minus, EVar "n"), EConst (CInt 1)) )
+                        )
+                    , EVar "n" ) ) ) )
+    in
+    w e |> run_infer
+  in
+  [%expect {| (int -> int) |}]
+;;
+
+let%expect_test _ =
+  let open Ast in
+  let _ =
+    let e =
+      ELetRec
+        ( "list_fold"
+        , EFun
+            ( PVar "list"
+            , EFun
+                ( PVar "acc"
+                , EFun
+                    ( PVar "f"
+                    , EMatch
+                        ( EVar "list"
+                        , [ PConst CNil, EVar "acc"
+                          ; ( PCons (PVar "head", PVar "tail")
+                            , EApply
+                                ( EApply
+                                    ( EApply (EVar "list_fold", EVar "tail")
+                                    , EApply (EApply (EVar "f", EVar "acc"), EVar "head")
+                                    )
+                                , EVar "f" ) )
+                          ] ) ) ) ) )
+    in
+    w e |> run_infer
+  in
+  [%expect {| ('_4 list -> ('_11 -> (('_11 -> ('_4 -> '_9)) -> '_11))) |}]
+;;
+
+let%expect_test _ =
+  let open Ast in
+  let _ =
+    let e =
+      ELetRec
+        ( "map"
+        , EFun
+            ( PVar "list"
+            , EFun
+                ( PVar "f"
+                , EMatch
+                    ( EVar "list"
+                    , [ PConst CNil, EConst CNil
+                      ; ( PCons (PVar "head", PVar "tail")
+                        , EApply
+                            ( EApply (EBinOp ConsConcat, EApply (EVar "f", EVar "head"))
+                            , EApply (EApply (EVar "map", EVar "f"), EVar "tail") ) )
+                      ] ) ) ) )
+    in
+    w e |> run_infer
+  in
+  [%expect {| ('_3 list -> (('_3 -> '_7 list) -> '_7 list)) |}]
+;;
