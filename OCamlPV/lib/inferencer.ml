@@ -26,7 +26,7 @@ let pp_error ppf : error -> _ = function
   | `Unification_failed (l, r) ->
     Format.fprintf
       ppf
-      "unification failed on %a and %a"
+      "Unification failed on %a and %a"
       Pprintast.pp_typ
       l
       Pprintast.pp_typ
@@ -372,7 +372,7 @@ let infer =
        | CUnit -> return (Subst.empty, Prim "unit")
        | CNil ->
          let* var = fresh_var in
-         return (Subst.empty, List var))
+         return (Subst.empty, list_typ var))
     | EBinOp op ->
       (match op with
        | Plus | Minus | Divide | Mult | Mod ->
@@ -401,9 +401,9 @@ let infer =
       let* s5 = unify t2 t3 in
       let* final_subst = Subst.compose_all [ s5; s4; s3; s2; s1 ] in
       return (final_subst, Subst.apply s5 t2)
-    | ELet (name, e) ->
+    | ELet (_, e) ->
       let* s, t = helper env e in
-      let env = TypeEnv.apply s env in
+      (* let env = TypeEnv.apply s env in *)
       return (s, t)
     | ELetIn (name, e1, e2) ->
       let* s1, t1 = helper env e1 in
@@ -486,40 +486,45 @@ let unify = Subst.unify
 
 let run_subst subst =
   match R.run subst with
-  | Result.Error _ -> Format.printf "Error%!"
+  | Result.Error e -> Format.printf "Error: %a%!" pp_error e
   | Ok subst -> Format.printf "%a%!" Subst.pp subst
 ;;
 
+(** Arrow unification *)
+
 let%expect_test _ =
-  let _ = unify (v 1 @-> v 1) (int_typ @-> v 2) |> run_subst in
+  let _ = unify (var_typ 1 @-> var_typ 1) (int_typ @-> var_typ 2) |> run_subst in
   [%expect {|
     '_1 -> int
     '_2 -> int |}]
 ;;
 
 let%expect_test _ =
-  let _ = unify (v 1 @-> v 1) ((v 2 @-> int_typ) @-> int_typ @-> int_typ) |> run_subst in
+  let _ =
+    unify (var_typ 1 @-> var_typ 1) ((var_typ 2 @-> int_typ) @-> int_typ @-> int_typ)
+    |> run_subst
+  in
   [%expect {|
     '_1 -> (int -> int)
     '_2 -> int |}]
 ;;
 
 let%expect_test _ =
-  let _ = unify (v 1 @-> v 2) (v 2 @-> v 3) |> run_subst in
+  let _ = unify (var_typ 1 @-> var_typ 2) (var_typ 2 @-> var_typ 3) |> run_subst in
   [%expect {|
     '_1 -> '_3
     '_2 -> '_3 |}]
 ;;
 
 let%expect_test _ =
-  let _ = unify (v 1 @-> bool_typ) (v 2 @-> int_typ) |> run_subst in
+  let _ = unify (var_typ 1 @-> bool_typ) (var_typ 2 @-> int_typ) |> run_subst in
   [%expect {| Error |}]
 ;;
 
 (** Infer tests *)
 
 let run_infer = function
-  | Result.Error _ -> Format.printf "Error%!"
+  | Result.Error e -> Format.printf "Error: %a%!" pp_error e
   | Result.Ok typed -> Format.printf "%a%!" Pprintast.pp_typ typed
 ;;
 
