@@ -729,6 +729,51 @@ let%expect_test _ =
 
 (** Infer list type *)
 
+let%expect_test _ =
+  let open Ast in
+  let _ =
+    let e =
+      EList
+        (EConst (CInt 1), EList (EConst (CInt 2), EList (EConst (CInt 3), EConst CNil)))
+    in
+    w e |> run_infer
+  in
+  [%expect {| int list |}]
+;;
+
+let%expect_test _ =
+  let open Ast in
+  let _ =
+    let e =
+      EList
+        ( ETuple [ EConst (CInt 5); EConst (CString "ocaml") ]
+        , EList
+            ( ETuple [ EConst (CInt 2); EConst (CString "is") ]
+            , EList (ETuple [ EConst (CInt 4); EConst (CString "cool") ], EConst CNil) )
+        )
+    in
+    w e |> run_infer
+  in
+  [%expect {| (int * string) list |}]
+;;
+
+(** Infer tuple type *)
+
+let%expect_test _ =
+  let open Ast in
+  let _ =
+    let e =
+      ETuple
+        [ EConst (CInt 2)
+        ; EConst (CString "kakadu")
+        ; ETuple [ EConst (CInt 42); EConst (CBool true) ]
+        ]
+    in
+    w e |> run_infer
+  in
+  [%expect {| (int * string * (int * bool)) |}]
+;;
+
 (** Some test funcitons to type inferencer test*)
 
 let%expect_test _ =
