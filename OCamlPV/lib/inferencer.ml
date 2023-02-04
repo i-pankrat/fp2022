@@ -521,6 +521,35 @@ let%expect_test _ =
   [%expect {| Error |}]
 ;;
 
+(** List unificaiton *)
+
+let%expect_test _ =
+  let _ =
+    unify (list_typ @@ list_typ @@ var_typ 1) (list_typ @@ var_typ 2) |> run_subst
+  in
+  [%expect {| '_2 -> '_1 list |}]
+;;
+
+let%expect_test _ =
+  let _ = unify (list_typ @@ int_typ) (list_typ @@ var_typ 0) |> run_subst in
+  [%expect {| '_0 -> int |}]
+;;
+
+(** Tuple unification *)
+
+let%expect_test _ =
+  let _ =
+    unify
+      (tuple_typ [ int_typ; var_typ 1; var_typ 2 ])
+      (tuple_typ [ var_typ 3; bool_typ; list_typ @@ int_typ ])
+    |> run_subst
+  in
+  [%expect {|
+    '_1 -> bool
+    '_2 -> int list
+    '_3 -> int |}]
+;;
+
 (** Infer tests *)
 
 let run_infer = function
