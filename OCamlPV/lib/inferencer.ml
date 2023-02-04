@@ -181,7 +181,18 @@ end = struct
       let* subs2 = unify (apply subs1 r1) (apply subs1 r2) in
       compose subs1 subs2
     | List a, List b -> unify a b
-    | Tuple a, b | b, Tuple a -> failwith "TODO: unify tuple"
+    | Tuple a, Tuple b ->
+      let subs =
+        List.fold2 a b ~init:(return empty) ~f:(fun subs a b ->
+          let* subs = subs in
+          let sa = apply subs a in
+          let sb = apply subs b in
+          let* sub1 = unify sa sb in
+          compose subs sub1)
+      in
+      (match subs with
+       | Ok res -> res
+       | Unequal_lengths -> fail (`Unification_failed (l, r)))
     | _ -> fail (`Unification_failed (l, r))
 
   and extend key value extensible_subst =
