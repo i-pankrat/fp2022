@@ -456,6 +456,25 @@ let infer =
       let* match_sub, match_ty = matches_helper matches in
       let* finalmatchsub = Subst.compose cond_sub match_sub in
       return (finalmatchsub, Subst.apply finalmatchsub match_ty)
+    | EList (h, t) ->
+      let* s1, t1 = helper env h in
+      let t1 = list_typ t1 in
+      let* s2, t2 = helper env t in
+      let* s3 = unify t1 t2 in
+      let* subst = Subst.compose_all [ s1; s2; s3 ] in
+      return (subst, Subst.apply subst t1)
+    | ETuple tuple ->
+      let* s, t =
+        List.fold
+          tuple
+          ~init:(return (Subst.empty, []))
+          ~f:(fun acc expr ->
+            let* tuple_s, tuple = acc in
+            let* s, t = helper env expr in
+            let* subst = Subst.compose s tuple_s in
+            return (subst, t :: tuple))
+      in
+      return (s, tuple_typ @@ List.rev t)
   in
   helper
 ;;
