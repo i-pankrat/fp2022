@@ -383,7 +383,8 @@ let infer =
          return (Subst.empty, arrow var (arrow var bool_typ))
        | ConsConcat ->
          let* var = fresh_var in
-         return (Subst.empty, arrow var (List var)))
+         let list = list_typ var in
+         return (Subst.empty, arrow list (arrow list list)))
     | EApply (e1, e2) ->
       let* s1, t1 = helper env e1 in
       let* s2, t2 = helper (TypeEnv.apply s1 env) e2 in
