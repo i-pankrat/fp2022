@@ -27,9 +27,9 @@ let pp_error ppf : error -> _ = function
     Format.fprintf
       ppf
       "Unification failed on %a and %a"
-      Pprintast.pp_typ
+      Pprintast.pp_typ_letter
       l
-      Pprintast.pp_typ
+      Pprintast.pp_typ_letter
       r
   | `Empty_Pattern -> Format.fprintf ppf "Empty pattern"
 ;;
@@ -141,7 +141,7 @@ end = struct
   let pp ppf subst =
     let open Format in
     Map.Poly.iteri subst ~f:(fun ~key ~data ->
-      fprintf ppf "'_%d -> %a@\n" key Pprintast.pp_typ data)
+      fprintf ppf "'_%d -> %a@\n" key Pprintast.pp_typ_binder data)
   ;;
 
   let empty = Map.Poly.empty
@@ -518,7 +518,7 @@ let%expect_test _ =
 
 let%expect_test _ =
   let _ = unify (var_typ 1 @-> bool_typ) (var_typ 2 @-> int_typ) |> run_subst in
-  [%expect {| Error |}]
+  [%expect {| Error: Unification failed on bool and int |}]
 ;;
 
 (** List unificaiton *)
@@ -554,7 +554,7 @@ let%expect_test _ =
 
 let run_infer = function
   | Result.Error e -> Format.printf "Error: %a%!" pp_error e
-  | Result.Ok typed -> Format.printf "%a%!" Pprintast.pp_typ typed
+  | Result.Ok typed -> Format.printf "%a%!" Pprintast.pp_typ_letter typed
 ;;
 
 (** Infer constant type*)
@@ -807,7 +807,7 @@ let%expect_test _ =
     in
     w e |> run_infer
   in
-  [%expect {| ('_2 -> bool) |}]
+  [%expect {| ('a -> bool) |}]
 ;;
 
 let%expect_test _ =
@@ -821,7 +821,7 @@ let%expect_test _ =
     in
     w e |> run_infer
   in
-  [%expect {| (('_1 * '_2) -> '_1) |}]
+  [%expect {| (('a * 'b) -> 'a) |}]
 ;;
 
 let%expect_test _ =
@@ -838,7 +838,7 @@ let%expect_test _ =
     in
     w e |> run_infer
   in
-  [%expect {| ('_2 list -> bool) |}]
+  [%expect {| ('a list -> bool) |}]
 ;;
 
 (** Some functions to test inferencer *)
@@ -894,7 +894,7 @@ let%expect_test _ =
     in
     w e |> run_infer
   in
-  [%expect {| ('_4 list -> ('_11 -> (('_11 -> ('_4 -> '_9)) -> '_11))) |}]
+  [%expect {| ('a list -> ('b -> (('b -> ('a -> 'c)) -> 'b))) |}]
 ;;
 
 let%expect_test _ =
@@ -918,5 +918,5 @@ let%expect_test _ =
     in
     w e |> run_infer
   in
-  [%expect {| ('_3 list -> (('_3 -> '_7 list) -> '_7 list)) |}]
+  [%expect {| ('a list -> (('a -> 'b list) -> 'b list)) |}]
 ;;
