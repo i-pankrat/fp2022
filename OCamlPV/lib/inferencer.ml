@@ -17,21 +17,23 @@ type error =
   [ `Occurs_check
   | `No_variable of string
   | `Unification_failed of ty * ty
-  | `Empty_Pattern
+  | `Empty_pattern
+  | `Empty_input
   ]
 
 let pp_error ppf : error -> _ = function
-  | `Occurs_check -> Format.fprintf ppf "Occurs check failed"
-  | `No_variable s -> Format.fprintf ppf "Undefined variable '%s'" s
+  | `Occurs_check -> Format.fprintf ppf "Typechecker error: occurs check failed"
+  | `No_variable s -> Format.fprintf ppf "Typechecker error:: undefined variable '%s'" s
   | `Unification_failed (l, r) ->
     Format.fprintf
       ppf
-      "Unification failed on %a and %a"
-      Pprintast.pp_typ_letter
+      "Typechecker error: unification failed on %a and %a"
+      Pprinttypedtree.pp_typ_letter
       l
-      Pprintast.pp_typ_letter
+      Pprinttypedtree.pp_typ_letter
       r
-  | `Empty_Pattern -> Format.fprintf ppf "Empty pattern"
+  | `Empty_pattern -> Format.fprintf ppf "Typechecker error: empty pattern"
+  | `Empty_input -> Format.fprintf ppf "Typechecker error: empty pattern"
 ;;
 
 module R : sig
@@ -141,7 +143,7 @@ end = struct
   let pp ppf subst =
     let open Format in
     Map.Poly.iteri subst ~f:(fun ~key ~data ->
-      fprintf ppf "'_%d -> %a@\n" key Pprintast.pp_typ_binder data)
+      fprintf ppf "'_%d -> %a@\n" key Pprinttypedtree.pp_typ_binder data)
   ;;
 
   let empty = Map.Poly.empty
@@ -437,7 +439,7 @@ let infer =
       let* cond_sub, cond_ty = helper env cond in
       let env = TypeEnv.apply cond_sub env in
       let rec (matches_helper : (pattern * expr) list -> (Subst.t * ty) R.t) = function
-        | [] -> fail `Empty_Pattern
+        | [] -> fail `Empty_pattern
         | hd :: [] ->
           (match hd with
            | pat, expr ->
