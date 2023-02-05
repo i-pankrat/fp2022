@@ -28,10 +28,10 @@ let is_uletter = function
   | _ -> false
 ;;
 
-let is_letter ch = is_lletter ch || is_uletter ch
+let is_fst_symbol ch = is_lletter ch || Poly.( = ) ch '_'
 
 let is_ident_symbol = function
-  | c -> is_letter c
+  | c -> is_fst_symbol c || is_uletter c || is_digit c
 ;;
 
 let is_kw = function
@@ -39,7 +39,7 @@ let is_kw = function
   | _ -> false
 ;;
 
-let prohibited = function
+let is_prohibited = function
   | "=" | "" | "+" | "-" | "(" | ")" | "[" | "]" | "#" | "%" | "^" | "&" -> true
   | _ -> false
 ;;
@@ -78,9 +78,12 @@ let pconst = pcint <|> pcbool <|> pcstring <|> pcnil <|> pcunit
 
 (** Parse ident *)
 
+let pfstsymbol = empty *> satisfy is_fst_symbol
+let pIdent = take_while is_ident_symbol
+
 let pIdent =
-  empty *> take_while is_ident_symbol
-  >>= fun res -> if is_kw res || prohibited res then fail "keyword" else return res
+  lift2 (fun f ident -> Format.sprintf "%c%s" f ident) pfstsymbol pIdent
+  >>= fun res -> if is_kw res || is_prohibited res then fail "keyword" else return res
 ;;
 
 (** Pattern constructors *)
@@ -155,7 +158,7 @@ let pack =
       ~failure_msg:"Can not parse internal list/tuple"
       [ pack.value pack; pack.tuple_p pack; pack.cons_sc pack ]
   in
-  let value _ = ppvar <|> ppconst <|> pwild in
+  let value _ = pwild <|> ppvar <|> ppconst in
   let tuple_p pack = fix @@ fun _ -> parse_tuple_parens (parsers pack) construct_ptuple in
   let tuple_wp pack = fix @@ fun _ -> parse_tuple (parsers pack) construct_ptuple in
   let cons_sc pack = fix @@ fun _ -> parse_cons_semicolon (parsers pack) create_cons_sc in
@@ -493,7 +496,12 @@ let%expect_test _ =
 (** Parse patterns tests *)
 
 let%expect_test _ =
-  print_string (interprete_parse_result show_pattern ppattern "4");
+  interprete_parse_result show_pattern ppattern "list_map";
+  [%expect {| (PVar "list_map") |}]
+;;
+
+let%expect_test _ =
+  interprete_parse_result show_pattern ppattern "4";
   [%expect {| (PConst (CInt 4)) |}]
 ;;
 
