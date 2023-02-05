@@ -6,7 +6,10 @@ open Angstrom
 open Ast
 open Base
 
-let parse p s = parse_string ~consume:All p s
+type error = string
+
+let pp_error ppf error = Format.fprintf ppf "%s" error
+let parse_str p s = parse_string ~consume:All p s
 
 let is_empty = function
   | ' ' | '\t' | '\n' | '\r' -> true
@@ -454,11 +457,12 @@ let pexpr = pack.expr pack
 let pstatements = sep_by1 (pstoken ";;") pexpr
 
 (** Parser tests *)
+let parse program = parse_str pstatements program
 
-let interprete_parse_result fm p str =
-  match parse p str with
-  | Result.Error e -> Format.sprintf "Error: %s" e
-  | Result.Ok ast -> fm ast
+let interprete_parse_result f p str =
+  match parse_str p str with
+  | Result.Error e -> Format.printf "Error: %s" e
+  | Result.Ok ast -> Format.printf "%s" (f ast)
 ;;
 
 (** Parse const tests *)
