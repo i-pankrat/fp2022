@@ -481,7 +481,26 @@ let infer =
   helper
 ;;
 
-let w e = Result.map (run (infer TypeEnv.empty e)) ~f:snd
+let check_types program =
+  let rec helper env = function
+    | [] -> fail `Empty_input
+    | hd :: [] ->
+      let* _, typ = infer env hd in
+      return typ
+    | hd :: tl ->
+      let* _, typ = infer env hd in
+      let env =
+        match hd with
+        | ELet (name, _) | ELetIn (name, _, _) | ELetRec (name, _) | ELetRecIn (name, _, _)
+          -> TypeEnv.extend env (name, S (VarSet.empty, typ))
+        | _ -> env
+      in
+      helper env tl
+  in
+  helper TypeEnv.empty program
+;;
+
+let check_types e = Result.map (run (check_types e)) ~f:Fun.id
 let unify = Subst.unify
 
 (** Unification tests *)
