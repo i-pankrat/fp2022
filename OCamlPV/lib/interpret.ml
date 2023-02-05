@@ -2,8 +2,6 @@
 
 (** SPDX-License-Identifier: LGPL-3.0-or-later *)
 
-(** Real monadic interpreter goes here *)
-
 open Ast
 open Base
 
@@ -54,7 +52,6 @@ type value =
 
 type environment = (id, value, String.comparator_witness) Map.t
 
-
 let cvint i = VInt i
 let cvbool b = VBool b
 let cvstring s = VString s
@@ -73,8 +70,6 @@ module Env (M : FailMonad) = struct
       Map.mapi env ~f:(fun ~key:name ~data:old_value ->
         if Poly.( = ) id name then value else old_value)
   ;;
-
-  List.fold_left
 
   let extend env bindings =
     return
@@ -289,29 +284,33 @@ module InterpretResult = Interpret (struct
   let ( let* ) monad f = bind monad ~f
 end)
 
-let interprete_eval_result fm test =
-  match InterpretResult.run test with
-  | Result.Error e -> "Error: " ^ show_ierror e
-  | Result.Ok ast -> fm ast
+let run = InterpretResult.run
+
+let interprete_eval_result test =
+  let open Format in
+  match run test with
+  | Result.Error e -> printf "%a" pp_ierror e
+  | Result.Ok res -> printf "%a" pp_value res
 ;;
 
 (* Tests for interpretator *)
 
 (* (1 + 1) * (5 - 2) * (42 / 6) *)
 let test =
-  EApply
-    ( EApply
-        ( EBinOp Mult
-        , EApply
-            ( EApply
-                ( EBinOp Mult
-                , EApply (EApply (EBinOp Plus, EConst (CInt 1)), EConst (CInt 1)) )
-            , EApply (EApply (EBinOp Minus, EConst (CInt 5)), EConst (CInt 2)) ) )
-    , EApply (EApply (EBinOp Divide, EConst (CInt 42)), EConst (CInt 6)) )
+  [ EApply
+      ( EApply
+          ( EBinOp Mult
+          , EApply
+              ( EApply
+                  ( EBinOp Mult
+                  , EApply (EApply (EBinOp Plus, EConst (CInt 1)), EConst (CInt 1)) )
+              , EApply (EApply (EBinOp Minus, EConst (CInt 5)), EConst (CInt 2)) ) )
+      , EApply (EApply (EBinOp Divide, EConst (CInt 42)), EConst (CInt 6)) )
+  ]
 ;;
 
 let%test _ =
-  match InterpretResult.run [ test ] with
+  match run test with
   | Base.Result.Ok (VInt 42) -> true
   | _ -> false
 ;;
@@ -326,7 +325,7 @@ let test =
 ;;
 
 let%test _ =
-  match InterpretResult.run test with
+  match run test with
   | Base.Result.Ok (VInt 6) -> true
   | _ -> false
 ;;
@@ -359,7 +358,7 @@ let test =
 ;;
 
 let%test _ =
-  match InterpretResult.run test with
+  match run test with
   | Base.Result.Ok (VInt 5050) -> true
   | _ -> false
 ;;
@@ -387,7 +386,7 @@ let test =
 ;;
 
 let%test _ =
-  match InterpretResult.run test with
+  match run test with
   | Base.Result.Ok (VInt 987) -> true
   | _ -> false
 ;;
@@ -413,7 +412,7 @@ let test =
 ;;
 
 let%test _ =
-  match InterpretResult.run test with
+  match run test with
   | Base.Result.Ok (VInt 120) -> true
   | _ -> false
 ;;
@@ -449,7 +448,7 @@ let test =
 ;;
 
 let%test _ =
-  match InterpretResult.run test with
+  match run test with
   | Base.Result.Ok (VInt 6) -> true
   | _ -> false
 ;;
@@ -482,7 +481,7 @@ let test =
 ;;
 
 let%expect_test _ =
-  print_string (interprete_eval_result show_value test);
+  interprete_eval_result test;
   [%expect {| (VList [(VInt 2); (VInt 4); (VInt 6)]) |}]
 ;;
 
@@ -524,7 +523,7 @@ let test =
 ;;
 
 let%test _ =
-  match InterpretResult.run test with
+  match run test with
   | Base.Result.Ok (VInt 6) -> true
   | _ -> false
 ;;
