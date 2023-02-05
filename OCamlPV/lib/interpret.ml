@@ -246,7 +246,7 @@ end = struct
           let* evaled = eval e env [] in
           return @@ (evaled :: l))
       in
-      return @@ VTuple list
+      return @@ VTuple (List.rev list)
   ;;
 
   let run_expr env expr : ((string, value, 'a) Base.Map.t * value, ierror) t =
