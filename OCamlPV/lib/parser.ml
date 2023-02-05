@@ -326,9 +326,11 @@ let pack =
   let evalue _ = pevalue in
   let lets pack =
     choice ~failure_msg:"Failed to parse lets" [ pack.elet pack; pack.eletrec pack ]
+    <* empty
   in
   let letsin pack =
     choice ~failure_msg:"Failed to parse letsin" [ pack.eletin pack; pack.eletrecin pack ]
+    <* empty
   in
   let expr pack =
     choice
@@ -468,32 +470,32 @@ let interprete_parse_result f p str =
 (** Parse const tests *)
 
 let%expect_test _ =
-  print_string (interprete_parse_result show_const pconst "42");
+  interprete_parse_result show_const pconst "42";
   [%expect {| (CInt 42) |}]
 ;;
 
 let%expect_test _ =
-  print_string (interprete_parse_result show_const pconst "false");
+  interprete_parse_result show_const pconst "false";
   [%expect {| (CBool false) |}]
 ;;
 
 let%expect_test _ =
-  print_string (interprete_parse_result show_const pconst "true");
+  interprete_parse_result show_const pconst "true";
   [%expect {| (CBool true) |}]
 ;;
 
 let%expect_test _ =
-  print_string (interprete_parse_result show_const pconst "\"Ocaml is cool!\"");
+  interprete_parse_result show_const pconst "\"Ocaml is cool!\"";
   [%expect {| (CString "Ocaml is cool!") |}]
 ;;
 
 let%expect_test _ =
-  print_string (interprete_parse_result show_const pconst "[]");
+  interprete_parse_result show_const pconst "[]";
   [%expect {| CNil |}]
 ;;
 
 let%expect_test _ =
-  print_string (interprete_parse_result show_const pconst " ()");
+  interprete_parse_result show_const pconst " ()";
   [%expect {| CUnit |}]
 ;;
 
@@ -510,17 +512,17 @@ let%expect_test _ =
 ;;
 
 let%expect_test _ =
-  print_string (interprete_parse_result show_pattern ppattern "a");
+  interprete_parse_result show_pattern ppattern "a";
   [%expect {| (PVar "a") |}]
 ;;
 
 let%expect_test _ =
-  print_string (interprete_parse_result show_pattern ppattern "[]");
+  interprete_parse_result show_pattern ppattern "[]";
   [%expect {| (PConst CNil) |}]
 ;;
 
 let%expect_test _ =
-  print_string (interprete_parse_result show_pattern ppattern "[a; b; c; d]");
+  interprete_parse_result show_pattern ppattern "[a; b; c; d]";
   [%expect
     {|
     (PCons ((PVar "a"),
@@ -530,7 +532,7 @@ let%expect_test _ =
 ;;
 
 let%expect_test _ =
-  print_string (interprete_parse_result show_pattern ppattern "a :: b :: c :: d :: []");
+  interprete_parse_result show_pattern ppattern "a :: b :: c :: d :: []";
   [%expect
     {|
     (PCons ((PVar "a"),
@@ -540,30 +542,30 @@ let%expect_test _ =
 ;;
 
 let%expect_test _ =
-  print_string (interprete_parse_result show_pattern ppattern "h :: t");
+  interprete_parse_result show_pattern ppattern "h :: t";
   [%expect {| (PCons ((PVar "h"), (PVar "t"))) |}]
 ;;
 
 let%expect_test _ =
-  print_string (interprete_parse_result show_pattern ppattern "(a, b, c, d)");
+  interprete_parse_result show_pattern ppattern "(a, b, c, d)";
   [%expect {|
     (PTuple [(PVar "a"); (PVar "b"); (PVar "c"); (PVar "d")])|}]
 ;;
 
 let%expect_test _ =
-  print_string (interprete_parse_result show_pattern ppattern "a, b, c, d");
+  interprete_parse_result show_pattern ppattern "a, b, c, d";
   [%expect {|
     (PTuple [(PVar "a"); (PVar "b"); (PVar "c"); (PVar "d")])|}]
 ;;
 
 let%expect_test _ =
-  print_string (interprete_parse_result show_pattern ppattern "_");
+  interprete_parse_result show_pattern ppattern "_";
   [%expect {|
     PWild|}]
 ;;
 
 let%expect_test _ =
-  print_string (interprete_parse_result show_pattern ppattern "[(a, b); (c, d)]");
+  interprete_parse_result show_pattern ppattern "[(a, b); (c, d)]";
   [%expect
     {|
     (PCons ((PTuple [(PVar "a"); (PVar "b")]),
@@ -571,7 +573,7 @@ let%expect_test _ =
 ;;
 
 let%expect_test _ =
-  print_string (interprete_parse_result show_pattern ppattern "((a, b), (c, d))");
+  interprete_parse_result show_pattern ppattern "((a, b), (c, d))";
   [%expect
     {|
     (PTuple
@@ -579,7 +581,7 @@ let%expect_test _ =
 ;;
 
 let%expect_test _ =
-  print_string (interprete_parse_result show_pattern ppattern "([a; b], [c; d], [e; f])");
+  interprete_parse_result show_pattern ppattern "([a; b], [c; d], [e; f])";
   [%expect
     {|
     (PTuple
@@ -589,7 +591,7 @@ let%expect_test _ =
 ;;
 
 let%expect_test _ =
-  print_string (interprete_parse_result show_pattern ppattern "[[a; b]; [c; d]]");
+  interprete_parse_result show_pattern ppattern "[[a; b]; [c; d]]";
   [%expect
     {|
     (PCons ((PCons ((PVar "a"), (PCons ((PVar "b"), (PConst CNil))))),
@@ -603,39 +605,39 @@ let%expect_test _ =
 (** Test binary operations *)
 
 let%expect_test _ =
-  print_string (interprete_parse_result show_expr pexpr "a + b");
+  interprete_parse_result show_expr pexpr "a + b";
   [%expect {|
         (EApply ((EApply ((EBinOp Plus), (EVar "a"))), (EVar "b"))) |}]
 ;;
 
 let%expect_test _ =
-  print_string (interprete_parse_result show_expr pexpr "(a + b)");
+  interprete_parse_result show_expr pexpr "(a + b)";
   [%expect {|
         (EApply ((EApply ((EBinOp Plus), (EVar "a"))), (EVar "b"))) |}]
 ;;
 
 let%expect_test _ =
-  print_string (interprete_parse_result show_expr pexpr "((a + b))");
+  interprete_parse_result show_expr pexpr "((a + b))";
   [%expect {|
         (EApply ((EApply ((EBinOp Plus), (EVar "a"))), (EVar "b"))) |}]
 ;;
 
 let%expect_test _ =
-  print_string (interprete_parse_result show_expr pexpr "a - 1");
+  interprete_parse_result show_expr pexpr "a - 1";
   [%expect
     {|
         (EApply ((EApply ((EBinOp Minus), (EVar "a"))), (EConst (CInt 1))))|}]
 ;;
 
 let%expect_test _ =
-  print_string (interprete_parse_result show_expr pexpr "(a - 1)");
+  interprete_parse_result show_expr pexpr "(a - 1)";
   [%expect
     {|
         (EApply ((EApply ((EBinOp Minus), (EVar "a"))), (EConst (CInt 1)))) |}]
 ;;
 
 let%expect_test _ =
-  print_string (interprete_parse_result show_expr pexpr "(a + b) * (c - d) * (e / d)");
+  interprete_parse_result show_expr pexpr "(a + b) * (c - d) * (e / d)";
   [%expect
     {|
         (EApply (
@@ -649,7 +651,7 @@ let%expect_test _ =
 ;;
 
 let%expect_test _ =
-  print_string (interprete_parse_result show_expr pexpr "1 :: list");
+  interprete_parse_result show_expr pexpr "1 :: list";
   [%expect
     {|
         (EApply ((EApply ((EBinOp ConsConcat), (EConst (CInt 1)))), (EVar "list"))) |}]
@@ -658,7 +660,7 @@ let%expect_test _ =
 (** Test application *)
 
 let%expect_test _ =
-  print_string (interprete_parse_result show_expr (pack.eapply pack) "f x y");
+  interprete_parse_result show_expr (pack.eapply pack) "f x y";
   [%expect {|
         (EApply ((EApply ((EVar "f"), (EVar "x"))), (EVar "y"))) |}]
 ;;
@@ -666,13 +668,13 @@ let%expect_test _ =
 (** Test condition statement *)
 
 let%expect_test _ =
-  print_string (interprete_parse_result show_expr pexpr "if a then b else c");
+  interprete_parse_result show_expr pexpr "if a then b else c";
   [%expect {|
         (EIfThenElse ((EVar "a"), (EVar "b"), (EVar "c"))) |}]
 ;;
 
 let%expect_test _ =
-  print_string (interprete_parse_result show_expr pexpr "if n = 1 then 1 else n");
+  interprete_parse_result show_expr pexpr "if n = 1 then 1 else n";
   [%expect
     {|
         (EIfThenElse (
@@ -683,7 +685,7 @@ let%expect_test _ =
 (** Test pattern matching *)
 
 let%expect_test _ =
-  print_string (interprete_parse_result show_expr pexpr "match x with | a -> b | _ -> c");
+  interprete_parse_result show_expr pexpr "match x with | a -> b | _ -> c";
   [%expect
     {|
         (EMatch ((EVar "x"), [((PVar "a"), (EVar "b")); (PWild, (EVar "c"))])) |}]
@@ -692,14 +694,14 @@ let%expect_test _ =
 (** Test fun *)
 
 let%expect_test _ =
-  print_string (interprete_parse_result show_expr pexpr "fun x -> fun y -> x");
+  interprete_parse_result show_expr pexpr "fun x -> fun y -> x";
   [%expect {| (EFun ((PVar "x"), (EFun ((PVar "y"), (EVar "x"))))) |}]
 ;;
 
 (** Test list *)
 
 let%expect_test _ =
-  print_string (interprete_parse_result show_expr pexpr "[a; b; c; d]");
+  interprete_parse_result show_expr pexpr "[a; b; c; d]";
   [%expect
     {|
     (EList ((EVar "a"),
@@ -709,7 +711,7 @@ let%expect_test _ =
 ;;
 
 let%expect_test _ =
-  print_string (interprete_parse_result show_expr pexpr "[[1]; [2]; [3]; [4]]");
+  interprete_parse_result show_expr pexpr "[[1]; [2]; [3]; [4]]";
   [%expect
     {|
     (EList ((EList ((EConst (CInt 1)), (EConst CNil))),
@@ -724,7 +726,7 @@ let%expect_test _ =
 (** Test tuple *)
 
 let%expect_test _ =
-  print_string (interprete_parse_result show_expr pexpr "((1, 2), (3, 4))");
+  interprete_parse_result show_expr pexpr "((1, 2), (3, 4))";
   [%expect
     {|
     (ETuple
@@ -735,12 +737,12 @@ let%expect_test _ =
 (** Test let and let rec *)
 
 let%expect_test _ =
-  print_string (interprete_parse_result show_expr pexpr "let id x = x");
+  interprete_parse_result show_expr pexpr "let id x = x";
   [%expect {| (ELet ("id", (EFun ((PVar "x"), (EVar "x"))))) |}]
 ;;
 
 let%expect_test _ =
-  print_string (interprete_parse_result show_expr pexpr "let sum x = fun y -> x + y");
+  interprete_parse_result show_expr pexpr "let sum x = fun y -> x + y";
   [%expect
     {|
     (ELet ("sum",
@@ -752,7 +754,7 @@ let%expect_test _ =
 ;;
 
 let%expect_test _ =
-  print_string (interprete_parse_result show_expr pexpr "let sum x y = x + y");
+  interprete_parse_result show_expr pexpr "let sum x y = x + y";
   [%expect
     {|
     (ELet ("sum",
@@ -764,11 +766,10 @@ let%expect_test _ =
 ;;
 
 let%expect_test _ =
-  print_string
-    (interprete_parse_result
-       show_expr
-       pexpr
-       "let rec fact n = if n = 1 then 1 else n * (fact (n - 1))");
+  interprete_parse_result
+    show_expr
+    pexpr
+    "let rec fact n = if n = 1 then 1 else n * (fact (n - 1))";
   [%expect
     {|
     (ELetRec ("fact",
@@ -789,11 +790,10 @@ let%expect_test _ =
 
 (* TODO: fix braces at application *)
 let%expect_test _ =
-  print_string
-    (interprete_parse_result
-       show_expr
-       pexpr
-       "let rec sumn n = if n = 1 then 1 else n + (sumn (n - 1))");
+  interprete_parse_result
+    show_expr
+    pexpr
+    "let rec sumn n = if n = 1 then 1 else n + (sumn (n - 1))";
   [%expect
     {|
     (ELetRec ("sumn",
@@ -814,32 +814,33 @@ let%expect_test _ =
 
 (* TODO: fix braces at application *)
 let%expect_test _ =
-  print_string
-    (interprete_parse_result
-       show_expr
-       pexpr
-       "let rec fib n = fun acc -> \n\
-       \  match n with \n\
-       \    | 1 -> acc \n\
-       \    | _ -> (fib (n - (1)) (acc * n))");
+  interprete_parse_result
+    show_expr
+    pexpr
+    "let rec fib n =\n\
+    \  match n with \n\
+    \    | 1 -> 1 \n\
+    \    | _ -> (fib (n - 1)) + (fib (n - 2))\n";
   [%expect
     {|
     (ELetRec ("fib",
        (EFun ((PVar "n"),
-          (EFun ((PVar "acc"),
-             (EMatch ((EVar "n"),
-                [((PConst (CInt 1)), (EVar "acc"));
-                  (PWild,
-                   (EApply (
+          (EMatch ((EVar "n"),
+             [((PConst (CInt 1)), (EConst (CInt 1)));
+               (PWild,
+                (EApply (
+                   (EApply ((EBinOp Plus),
                       (EApply ((EVar "fib"),
                          (EApply ((EApply ((EBinOp Minus), (EVar "n"))),
                             (EConst (CInt 1))))
-                         )),
-                      (EApply ((EApply ((EBinOp Mult), (EVar "acc"))), (EVar "n")
                          ))
-                      )))
-                  ]
-                ))
+                      )),
+                   (EApply ((EVar "fib"),
+                      (EApply ((EApply ((EBinOp Minus), (EVar "n"))),
+                         (EConst (CInt 2))))
+                      ))
+                   )))
+               ]
              ))
           ))
        )) |}]
@@ -849,43 +850,51 @@ let%expect_test _ =
 
 (* TODO: fix braces at application *)
 let%expect_test _ =
-  print_string
-    (interprete_parse_result
-       show_expr
-       pexpr
-       "let listreverse init = \n\
-       \  match list with \n\
-       \    | [] -> acc \n\
-       \    | h :: t -> (helper (h :: acc) t)");
+  interprete_parse_result
+    show_expr
+    pexpr
+    "let list_rev list = \n\
+    \ let rec helper acc l = \n\
+    \   match l with \n\
+    \    | [] -> acc \n\
+    \    | hd :: tl -> (helper (hd :: acc) tl) in \n\
+    \ (helper [] list) \n";
   [%expect
     {|
-    (ELet ("listreverse",
-       (EFun ((PVar "init"),
-          (EMatch ((EVar "list"),
-             [((PConst CNil), (EVar "acc"));
-               ((PCons ((PVar "h"), (PVar "t"))),
-                (EApply (
-                   (EApply ((EVar "helper"),
-                      (EApply ((EApply ((EBinOp ConsConcat), (EVar "h"))),
-                         (EVar "acc")))
-                      )),
-                   (EVar "t"))))
-               ]
+    (ELet ("list_rev",
+       (EFun ((PVar "list"),
+          (ELetRecIn ("helper",
+             (EFun ((PVar "acc"),
+                (EFun ((PVar "l"),
+                   (EMatch ((EVar "l"),
+                      [((PConst CNil), (EVar "acc"));
+                        ((PCons ((PVar "hd"), (PVar "tl"))),
+                         (EApply (
+                            (EApply ((EVar "helper"),
+                               (EApply (
+                                  (EApply ((EBinOp ConsConcat), (EVar "hd"))),
+                                  (EVar "acc")))
+                               )),
+                            (EVar "tl"))))
+                        ]
+                      ))
+                   ))
+                )),
+             (EApply ((EApply ((EVar "helper"), (EConst CNil))), (EVar "list")))
              ))
           ))
        )) |}]
 ;;
 
 let%expect_test _ =
-  print_string
-    (interprete_parse_result
-       show_statements
-       pstatements
-       "let rec map f = fun list -> \n\
-       \  match list with \n\
-       \    | [] -> [] \n\
-       \    | h :: t -> (f h) :: (map f t);;\n\
-        let list = (map (fun x -> x + x) [1; 2; 3])");
+  interprete_parse_result
+    show_statements
+    pstatements
+    "let rec map f = fun list -> \n\
+    \  match list with \n\
+    \    | [] -> [] \n\
+    \    | h :: t -> (f h) :: (map f t);;\n\
+     let list = (map (fun x -> x + x) [1; 2; 3])";
   [%expect
     {|
     [(ELetRec ("map",
