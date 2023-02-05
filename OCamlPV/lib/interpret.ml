@@ -24,13 +24,15 @@ type ierror =
   | `EmptyInput
   ]
 
-let show_ierror : ierror -> string = function
-  | `DivisionByZero -> "DivisionByZero"
-  | `UnboundValue s -> "UnboudnValue: " ^ s
-  | `TypeMismatch -> "TypeMismatch"
-  | `UnsupportedOperation -> "UnsupportedOperation"
-  | `PatternMismatch -> "PatternMismatch"
-  | `EmptyInput -> "EmptyInput"
+let pp_ierror ppf : ierror -> unit =
+  let open Format in
+  function
+  | `DivisionByZero -> fprintf ppf "Runtime error: division by zero"
+  | `UnboundValue s -> fprintf ppf "Runtime error: unbind variable %s" s
+  | `TypeMismatch -> fprintf ppf "Runtime error: "
+  | `UnsupportedOperation -> fprintf ppf "Runtime error: unsupported operation"
+  | `PatternMismatch -> fprintf ppf "Runtime error: pattern mismatch"
+  | `EmptyInput -> fprintf ppf "Runtime error: empty input to interpret"
 ;;
 
 type 'a binop =
