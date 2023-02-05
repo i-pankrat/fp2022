@@ -1,20 +1,8 @@
 (executable
- (name demoAO)
- (modules demoAO)
- (public_name demoAO)
- (libraries ocaml_pv_lib))
-
-(executable
- (name demoNO)
- (modules demoNO)
- (public_name demoNO)
- (libraries ocaml_pv_lib))
-
-(executable
- (name demoParse)
- (modules demoParse)
- (public_name demoParse)
- (libraries ocaml_pv_lib stdio))
+ (name demo)
+ (modules Demo)
+ (public_name demo)
+ (libraries OCamlPV.Lib stdio))
 
 (cram
- (deps ./demoNO.exe ./demoAO.exe ./demoParse.exe ../REPL.exe))
+ (deps ./demo.exe))
