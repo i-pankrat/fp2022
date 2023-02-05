@@ -6,10 +6,9 @@
   Interpret
   Inferencer
   Parser
-  Printast
-  Pprintast
-  Utils
-  Tests
+  Printer
+  Pprintvalue
+  Pprinttypedtree
   Typedtree)
  (libraries base angstrom)
  (preprocess
