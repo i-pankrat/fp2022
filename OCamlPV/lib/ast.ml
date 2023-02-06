@@ -51,6 +51,8 @@ and pvtype =
   | TNoType
 [@@deriving show { with_path = false }]
 
+and parameters = id list
+
 and expr =
   | EConst of const
   | EIfThenElse of expr * expr * expr
@@ -66,7 +68,7 @@ and expr =
   | EList of expr * expr
   | ETuple of expr list
   | EPolyVariant of id * expr list (** Polymorphic variants *)
-  | EType of id * pvtype
+  | EType of id * parameters * (id * pvtype) list
       (** type id = ... It is possible to declare only polymorphic variants. *)
 [@@deriving show { with_path = false }]
 
