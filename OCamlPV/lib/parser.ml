@@ -1279,3 +1279,71 @@ let%expect_test _ =
          ))
       ] |}]
 ;;
+
+(** List.nth_opt *)
+
+let%expect_test _ =
+  interprete_parse_result
+    show_statements
+    pstatements
+    "type 'a option = [ `Some of 'a | `None ];; \n\
+     let nth_opt list number = \n\
+    \   let rec helper l number = \n\
+    \     match l with | [] -> `None\n\
+    \     | hd :: tl -> (match (n + 1) with \n\
+    \                   | number -> `Some hd \n\
+    \                   | _ -> (helper tl (n + 1))) \n\
+    \   in (helper list 0);;\n\
+     let res = (nth_opt [1; 2; 3; 4; 5] 5)";
+  [%expect
+    {|
+    [(EType ("option", ["'a"], [("`Some", (TAny "'a")); ("`None", TNoType)]));
+      (ELet ("nth_opt",
+         (EFun ((PVar "list"),
+            (EFun ((PVar "number"),
+               (ELetRecIn ("helper",
+                  (EFun ((PVar "l"),
+                     (EFun ((PVar "number"),
+                        (EMatch ((EVar "l"),
+                           [((PConst CNil), (EPolyVariant ("`None", [])));
+                             ((PCons ((PVar "hd"), (PVar "tl"))),
+                              (EMatch (
+                                 (EApply ((EApply ((EBinOp Plus), (EVar "n"))),
+                                    (EConst (CInt 1)))),
+                                 [((PVar "number"),
+                                   (EPolyVariant ("`Some", [(EVar "hd")])));
+                                   (PWild,
+                                    (EApply (
+                                       (EApply ((EVar "helper"), (EVar "tl"))),
+                                       (EApply (
+                                          (EApply ((EBinOp Plus), (EVar "n"))),
+                                          (EConst (CInt 1))))
+                                       )))
+                                   ]
+                                 )))
+                             ]
+                           ))
+                        ))
+                     )),
+                  (EApply ((EApply ((EVar "helper"), (EVar "list"))),
+                     (EConst (CInt 0))))
+                  ))
+               ))
+            ))
+         ));
+      (ELet ("res",
+         (EApply (
+            (EApply ((EVar "nth_opt"),
+               (EList ((EConst (CInt 1)),
+                  (EList ((EConst (CInt 2)),
+                     (EList ((EConst (CInt 3)),
+                        (EList ((EConst (CInt 4)),
+                           (EList ((EConst (CInt 5)), (EConst CNil)))))
+                        ))
+                     ))
+                  ))
+               )),
+            (EConst (CInt 5))))
+         ))
+      ] |}]
+;;
