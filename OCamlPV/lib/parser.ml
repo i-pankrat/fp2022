@@ -933,6 +933,38 @@ let%expect_test _ =
          (ETuple [(EConst (CInt 3)); (EConst (CInt 4))])]) |}]
 ;;
 
+(** Test polymorphic variant *)
+
+let%expect_test _ =
+  interprete_parse_result show_expr pexpr "`None";
+  [%expect {| (EPolyVariant ("`None", [])) |}]
+;;
+
+let%expect_test _ =
+  interprete_parse_result show_expr pexpr "`Some x";
+  [%expect {| (EPolyVariant ("`Some", [(EVar "x")])) |}]
+;;
+
+let%expect_test _ =
+  interprete_parse_result show_expr pexpr "`Pair (a, b)";
+  [%expect {| (EPolyVariant ("`Pair", [(EVar "a"); (EVar "b")])) |}]
+;;
+
+let%expect_test _ =
+  interprete_parse_result show_expr pexpr "`Some `Ok";
+  [%expect {| (EPolyVariant ("`Some", [(EPolyVariant ("`Ok", []))])) |}]
+;;
+
+let%expect_test _ =
+  interprete_parse_result show_expr pexpr "`Some ([a; b], (c, d))";
+  [%expect
+    {|
+    (EPolyVariant ("`Some",
+       [(EList ((EVar "a"), (EList ((EVar "b"), (EConst CNil)))));
+         (ETuple [(EVar "c"); (EVar "d")])]
+       )) |}]
+;;
+
 (** Test let and let rec *)
 
 let%expect_test _ =
