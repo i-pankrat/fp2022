@@ -35,6 +35,9 @@ and pattern =
   | PTuple of pattern list
   | PCons of pattern * pattern (* head and tail *)
   | PWild
+  | PPolyVariant of id * pattern list
+      (** Polymorphic variants. Number of the elements in the list
+          represents the number of arguments which contructor takes*)
 [@@deriving eq, show { with_path = false }]
 
 and expr =
