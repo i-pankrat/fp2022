@@ -207,6 +207,8 @@ let cpvtype id = TType id
 let cpvint = TInt
 let cpvbool = TBool
 let cpvstring = TString
+let cpvany id = TAny id
+let cnotype = TNoType
 
 (** Parsing PVtype*)
 let cpvlist v l =
@@ -217,9 +219,11 @@ let cpvlist v l =
   helper l
 ;;
 
+let pparameter = (fun res -> Format.sprintf "'%s" res) <$> pstoken "'" *> pIdent
 let ppvint = lift (fun _ -> cpvint) (pstoken "int")
 let ppvbool = lift (fun _ -> cpvbool) (pstoken "bool")
 let ppvstring = lift (fun _ -> cpvstring) (pstoken "string")
+let ppvany = lift (fun any -> cpvany any) pparameter
 let ppvtype = lift (fun typ -> cpvtype typ) pIdent
 let ppvlist p = lift (fun l -> cpvlist l) (p <* many1 (pstoken "list"))
 let ppvlist p = lift2 (fun t l -> cpvlist t l) p (many1 (pstoken "list"))
@@ -230,6 +234,7 @@ let ppvtuple p =
 
 type pvdispatch =
   { tvalue : pvdispatch -> pvtype t
+  ; tany : pvdispatch -> pvtype t
   ; ttuple : pvdispatch -> pvtype t
   ; tlist : pvdispatch -> pvtype t
   ; pvtype : pvdispatch -> pvtype t
@@ -242,22 +247,26 @@ let pack =
     @@ fun _ ->
     choice
       ~failure_msg:"Failed to parse type declaration"
-      [ pack.ttuple pack; pack.tlist pack; pack.tvalue pack; pack.pvtype pack ]
+      [ pack.ttuple pack
+      ; pack.tlist pack
+      ; pack.tvalue pack
+      ; pack.tany pack
+      ; pack.pvtype pack
+      ]
   in
-  let tvalue _ = choice [ ppvint; ppvbool; ppvstring ] in
+  let tvalue pack =
+    choice [ ppvint; ppvbool; ppvstring; pack.tany pack; pack.pvtype pack ]
+  in
   let tlist pack =
-    fix
-    @@ fun _ ->
-    ppvlist @@ choice [ pparens @@ pack.ttuple pack; pack.tvalue pack; pack.pvtype pack ]
+    fix @@ fun _ -> ppvlist @@ choice [ pparens @@ pack.ttuple pack; pack.tvalue pack ]
   in
   let ttuple pack =
     fix
-    @@ fun self ->
-    ppvtuple
-    @@ choice [ pack.tlist pack; pparens self; pack.tvalue pack; pack.pvtype pack ]
+    @@ fun self -> ppvtuple @@ choice [ pack.tlist pack; pparens self; pack.tvalue pack ]
   in
   let pvtype _ = ppvtype in
-  { tvalue; ttuple; tlist; pvtype; pv }
+  let tany _ = ppvany in
+  { tvalue; tany; ttuple; tlist; pvtype; pv }
 ;;
 
 let ppvtype = pack.pv pack
