@@ -107,17 +107,18 @@ let construct_pv i c = PPolyVariant (i, c)
 let ppconst = pconst >>| fun x -> PConst x
 let ppvar = pIdent >>| fun x -> PVar x
 let pwild = pstoken "_" *> return PWild
-let ppv_noargs = ppvconstructor >>= fun constr -> return @@ construct_pv constr []
-let ppv_arg p = lift2 (fun constr arg -> construct_pv constr [ arg ]) ppvconstructor p
+let ppv_noargs decl = ppvconstructor >>= fun constr -> return @@ decl constr []
+let ppv_arg p decl = lift2 (fun constr arg -> decl constr [ arg ]) ppvconstructor p
 
-let ppv_args p =
+let ppv_args p decl =
   lift2
-    (fun constr args -> construct_pv constr args)
+    (fun constr args -> decl constr args)
     ppvconstructor
     (pparens @@ sep_by1 (pstoken ",") p)
 ;;
 
-let ppv p = choice [ ppv_args p; ppv_arg p; ppv_noargs ]
+let ppv p decl = choice [ ppv_args p decl; ppv_arg p decl; ppv_noargs decl ]
+let pppv p = ppv p construct_pv
 
 let rec create_cons_dc = function
   | [] -> failwith "todo"
@@ -275,6 +276,7 @@ let evar x = EVar x
 let ebinop op = EBinOp op
 let elist h t = EList (h, t)
 let etuple t = ETuple t
+let epolyvariant c args = EPolyVariant (c, args)
 
 (** Parse expr *)
 
@@ -297,6 +299,7 @@ type edispatch =
   ; eapply : edispatch -> expr t
   ; elist : edispatch -> expr t
   ; etuple : edispatch -> expr t
+  ; epv : edispatch -> expr t
   ; expr : edispatch -> expr t
   }
 
@@ -327,6 +330,8 @@ let pefun pexpr =
     (pstoken "fun" *> pargs1)
     (pstoken "->" *> pexpr)
 ;;
+
+let pepv p = ppv p epolyvariant
 
 let parse_rec_or_not =
   pstoken "let" *> option "false" (pstoken1 "rec") >>| fun x -> x != "false"
@@ -432,6 +437,7 @@ let pack =
       ; pack.ematch pack
       ; pack.elist pack
       ; pack.etuple pack
+      ; pack.epv pack
       ]
   in
   let econdition pack =
@@ -514,7 +520,7 @@ let pack =
   let value_parsers pack =
     choice
       ~failure_msg:"Failed to parse list"
-      [ pack.evalue pack; pack.etuple pack; pack.elist pack ]
+      [ pack.evalue pack; pack.etuple pack; pack.elist pack; pack.epv pack ]
   in
   let elist pack =
     fix
@@ -527,6 +533,7 @@ let pack =
     parse_cons_semicolon (value_parsers pack) create_cons_sc
   in
   let etuple pack = fix @@ fun _ -> parse_tuple_parens (value_parsers pack) etuple in
+  let epv pack = fix @@ fun _ -> pepv @@ value_parsers pack in
   { evalue
   ; econdition
   ; elet
@@ -539,6 +546,7 @@ let pack =
   ; eapply
   ; elist
   ; etuple
+  ; epv
   ; expr
   }
 ;;
