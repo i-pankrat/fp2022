@@ -40,6 +40,15 @@ and pattern =
           represents the number of arguments which contructor takes*)
 [@@deriving eq, show { with_path = false }]
 
+and pvtype =
+  | TTuple of pvtype list
+  | TList of pvtype
+  | TType of id
+  | TInt
+  | TString
+  | TBool
+[@@deriving show { with_path = false }]
+
 and expr =
   | EConst of const
   | EIfThenElse of expr * expr * expr
@@ -54,6 +63,9 @@ and expr =
   | EApply of expr * expr
   | EList of expr * expr
   | ETuple of expr list
+  | EPolyVariant of id * expr list (** Polymorphic variants *)
+  | EType of id * pvtype
+      (** type id = ... It is possible to declare only polymorphic variants. *)
 [@@deriving show { with_path = false }]
 
 and statements = expr list [@@deriving show { with_path = false }]
