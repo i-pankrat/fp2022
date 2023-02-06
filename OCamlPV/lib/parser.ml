@@ -787,7 +787,8 @@ let%expect_test _ =
     show_pvtype
     ppvtype
     "env * (int list * bool) list * fst_type list * (int * int) list";
-  [%expect {|
+  [%expect
+    {|
     (TTuple
        [(TType "env"); (TList (TTuple [(TList TInt); TBool]));
          (TList (TType "fst_type")); (TList (TTuple [TInt; TInt]))]) |}]
@@ -806,6 +807,25 @@ let%expect_test _ =
 let%expect_test _ =
   interprete_parse_result show_pvtype ppvtype "my_type list";
   [%expect {| (TList (TType "my_type")) |}]
+;;
+
+let%expect_test _ =
+  interprete_parse_result show_pvtype ppvtype "'a";
+  [%expect {| (TAny "'a") |}]
+;;
+
+let%expect_test _ =
+  interprete_parse_result show_pvtype ppvtype "'a list";
+  [%expect {| (TList (TAny "'a")) |}]
+;;
+
+let%expect_test _ =
+  interprete_parse_result show_pvtype ppvtype "('a list * 'b list) list * int list";
+  [%expect
+    {|
+    (TTuple
+       [(TList (TTuple [(TList (TAny "'a")); (TList (TAny "'b"))])); (TList TInt)
+         ]) |}]
 ;;
 
 (** Expression tests *)
