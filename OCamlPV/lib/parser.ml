@@ -624,6 +624,34 @@ let%expect_test _ =
        )) |}]
 ;;
 
+let%expect_test _ =
+  interprete_parse_result show_pattern ppattern "`None";
+  [%expect {|
+    (PPolyVariant ("`None", [])) |}]
+;;
+
+let%expect_test _ =
+  interprete_parse_result show_pattern ppattern "`Some a";
+  [%expect {|
+    (PPolyVariant ("`Some", [(PVar "a")])) |}]
+;;
+
+let%expect_test _ =
+  interprete_parse_result show_pattern ppattern "`None";
+  [%expect {|
+    (PPolyVariant ("`None", [])) |}]
+;;
+
+let%expect_test _ =
+  interprete_parse_result show_pattern ppattern "`MyPV ([], \"OCaml\", (a, b))";
+  [%expect
+    {|
+    (PPolyVariant ("`MyPV",
+       [(PConst CNil); (PConst (CString "OCaml"));
+         (PTuple [(PVar "a"); (PVar "b")])]
+       )) |}]
+;;
+
 (** Expression tests *)
 
 (** Test binary operations *)
