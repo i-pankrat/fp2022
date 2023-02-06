@@ -1030,6 +1030,62 @@ let%expect_test _ =
        )) |}]
 ;;
 
+(** Test type declaration *)
+
+let%expect_test _ =
+  interprete_parse_result
+    show_expr
+    pexpr
+    "type figure = [ `Square of int | `Rectangle of int * int | `Circle of int]";
+  [%expect
+    {|
+    (EType ("figure", [],
+       [("`Square", TInt); ("`Rectangle", (TTuple [TInt; TInt]));
+         ("`Circle", TInt)]
+       )) |}]
+;;
+
+let%expect_test _ =
+  interprete_parse_result show_expr pexpr "type 'a option = [ `Some of 'a | `None ]";
+  [%expect
+    {|
+    (EType ("option", ["'a"], [("`Some", (TAny "'a")); ("`None", TNoType)])) |}]
+;;
+
+let%expect_test _ =
+  interprete_parse_result show_expr pexpr "type 'a option = [ `Some of 'a | `None ]";
+  [%expect
+    {|
+    (EType ("option", ["'a"], [("`Some", (TAny "'a")); ("`None", TNoType)])) |}]
+;;
+
+let%expect_test _ =
+  interprete_parse_result
+    show_expr
+    pexpr
+    "type 'a 'b 'c 'd 'e grade = [ `Excelent of 'a | `Good of 'b | `Ok of 'c | `NotBad \
+     of 'd | `Bad of 'e | `Cumpot ]";
+  [%expect
+    {|
+    (EType ("grade", ["'a"; "'b"; "'c"; "'d"; "'e"],
+       [("`Excelent", (TAny "'a")); ("`Good", (TAny "'b")); ("`Ok", (TAny "'c"));
+         ("`NotBad", (TAny "'d")); ("`Bad", (TAny "'e")); ("`Cumpot", TNoType)]
+       )) |}]
+;;
+
+let%expect_test _ =
+  interprete_parse_result
+    show_expr
+    pexpr
+    "type 'a 'b good_or_bad = [ `Yes of 'hello * message list | `No of 'a * 'b]";
+  [%expect
+    {|
+    (EType ("good_or_bad", ["'a"; "'b"],
+       [("`Yes", (TTuple [(TAny "'hello"); (TList (TType "message"))]));
+         ("`No", (TTuple [(TAny "'a"); (TAny "'b")]))]
+       )) |}]
+;;
+
 (** Test let and let rec *)
 
 let%expect_test _ =
