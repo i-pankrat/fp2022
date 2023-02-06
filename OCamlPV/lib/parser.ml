@@ -191,11 +191,75 @@ let pack =
   let pvparsers pack =
     choice [ pack.tuple_p pack; pack.cons_sc pack; pack.poly_variant pack; value pack ]
   in
-  let poly_variant pack = fix @@ fun _ -> ppv (pvparsers pack) in
+  let poly_variant pack = fix @@ fun _ -> pppv (pvparsers pack) in
   { cons_sc; cons_dc; tuple_p; tuple_wp; poly_variant; value; pattern }
 ;;
 
 let ppattern = pack.pattern pack
+
+(** PVtype constructors *)
+
+let cpvlist a = TList a
+let cpvtuple l = TTuple l
+let cpvconst l = TTuple l
+let cpvtype id = TType id
+let cpvint = TInt
+let cpvbool = TBool
+let cpvstring = TString
+
+(** Parsing PVtype*)
+let cpvlist v l =
+  let rec helper = function
+    | [] -> v
+    | _ :: tl -> cpvlist @@ helper tl
+  in
+  helper l
+;;
+
+let ppvint = lift (fun _ -> cpvint) (pstoken "int")
+let ppvbool = lift (fun _ -> cpvbool) (pstoken "bool")
+let ppvstring = lift (fun _ -> cpvstring) (pstoken "string")
+let ppvtype = lift (fun typ -> cpvtype typ) pIdent
+let ppvlist p = lift (fun l -> cpvlist l) (p <* many1 (pstoken "list"))
+let ppvlist p = lift2 (fun t l -> cpvlist t l) p (many1 (pstoken "list"))
+
+let ppvtuple p =
+  lift2 (fun f l -> cpvtuple (f :: l)) (p <* pstoken "*") (sep_by1 (pstoken "*") p)
+;;
+
+type pvdispatch =
+  { tvalue : pvdispatch -> pvtype t
+  ; ttuple : pvdispatch -> pvtype t
+  ; tlist : pvdispatch -> pvtype t
+  ; pvtype : pvdispatch -> pvtype t
+  ; pv : pvdispatch -> pvtype t
+  }
+
+let pack =
+  let pv pack =
+    fix
+    @@ fun _ ->
+    choice
+      ~failure_msg:"Failed to parse type declaration"
+      [ pack.ttuple pack; pack.tlist pack; pack.tvalue pack; pack.pvtype pack ]
+  in
+  let tvalue _ = choice [ ppvint; ppvbool; ppvstring ] in
+  let tlist pack =
+    fix
+    @@ fun _ ->
+    ppvlist @@ choice [ pparens @@ pack.ttuple pack; pack.tvalue pack; pack.pvtype pack ]
+  in
+  let ttuple pack =
+    fix
+    @@ fun self ->
+    ppvtuple
+    @@ choice [ pack.tlist pack; pparens self; pack.tvalue pack; pack.pvtype pack ]
+  in
+  let pvtype _ = ppvtype in
+  { tvalue; ttuple; tlist; pvtype; pv }
+;;
+
+let ppvtype = pack.pv pack
 
 (** Expr constructors *)
 
