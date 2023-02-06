@@ -89,17 +89,35 @@ let pIdent =
   >>= fun res -> if is_kw res || is_prohibited res then fail "keyword" else return res
 ;;
 
+let ppvconstructor =
+  empty
+  *> char '`'
+  *> lift2 (fun fst ident -> Format.sprintf "`%c%s" fst ident) (satisfy is_uletter) pIdent
+;;
+
 (** Pattern constructors *)
 
 let construct_ptuple t = PTuple t
 let construct_pconst c = PConst c
 let construct_pcons h t = PCons (h, t)
+let construct_pv i c = PPolyVariant (i, c)
 
 (** Parse patterns *)
 
 let ppconst = pconst >>| fun x -> PConst x
 let ppvar = pIdent >>| fun x -> PVar x
 let pwild = pstoken "_" *> return PWild
+let ppv_noargs = ppvconstructor >>= fun constr -> return @@ construct_pv constr []
+let ppv_arg p = lift2 (fun constr arg -> construct_pv constr [ arg ]) ppvconstructor p
+
+let ppv_args p =
+  lift2
+    (fun constr args -> construct_pv constr args)
+    ppvconstructor
+    (pparens @@ sep_by1 (pstoken ",") p)
+;;
+
+let ppv p = choice [ ppv_args p; ppv_arg p; ppv_noargs ]
 
 let rec create_cons_dc = function
   | [] -> failwith "todo"
@@ -141,6 +159,7 @@ type pdispatch =
   ; cons_dc : pdispatch -> pattern t
   ; tuple_p : pdispatch -> pattern t
   ; tuple_wp : pdispatch -> pattern t
+  ; poly_variant : pdispatch -> pattern t
   ; value : pdispatch -> pattern t
   ; pattern : pdispatch -> pattern t
   }
@@ -153,6 +172,7 @@ let pack =
       ; pack.tuple_wp pack
       ; pack.cons_sc pack
       ; pack.cons_dc pack
+      ; pack.poly_variant pack
       ; pack.value pack
       ]
   in
@@ -168,7 +188,11 @@ let pack =
   let cons_dc pack =
     fix @@ fun _ -> parse_cons_doublecolon (parsers pack) create_cons_dc
   in
-  { cons_sc; cons_dc; tuple_p; tuple_wp; value; pattern }
+  let pvparsers pack =
+    choice [ pack.tuple_p pack; pack.cons_sc pack; pack.poly_variant pack; value pack ]
+  in
+  let poly_variant pack = fix @@ fun _ -> ppv (pvparsers pack) in
+  { cons_sc; cons_dc; tuple_p; tuple_wp; poly_variant; value; pattern }
 ;;
 
 let ppattern = pack.pattern pack
