@@ -57,6 +57,7 @@ let pstoken1 s = empty1 *> string s
 let pparens p = pstoken "(" *> p <* pstoken ")"
 let pquotes p = pstoken "\"" *> p <* pstoken "\""
 let pbrackets p = pstoken "[" *> p <* pstoken "]"
+let pverticalbar p = pstoken "|" *> p
 
 (** Const constructors *)
 
@@ -286,6 +287,7 @@ let ebinop op = EBinOp op
 let elist h t = EList (h, t)
 let etuple t = ETuple t
 let epolyvariant c args = EPolyVariant (c, args)
+let etype id par pvtyp = EType (id, par, pvtyp)
 
 (** Parse expr *)
 
@@ -309,6 +311,7 @@ type edispatch =
   ; elist : edispatch -> expr t
   ; etuple : edispatch -> expr t
   ; epv : edispatch -> expr t
+  ; etype : edispatch -> expr t
   ; expr : edispatch -> expr t
   }
 
@@ -368,6 +371,36 @@ let eletdecl pexpr =
     pargs
     (pstoken1 "=" *> pexpr)
     (pstoken1 "in" *> pexpr)
+;;
+
+let ptyp p =
+  lift2
+    (fun constr t ->
+      Format.printf "res: %s\n" constr;
+      constr, t)
+    ppvconstructor
+    (pstoken "of" *> p)
+;;
+
+let ptyp p =
+  lift2
+    (fun constr typ -> constr, typ)
+    ppvconstructor
+    (option cnotype (pstoken "of" *> p))
+;;
+
+let pfsttyp p = pverticalbar @@ ptyp p <|> ptyp p
+let ptyp p = pverticalbar @@ ptyp p
+let ptyps p = pbrackets @@ lift2 (fun f l -> f :: l) (pfsttyp p) (many @@ ptyp p)
+let pparameters = many pparameter
+
+let ptype p =
+  pstoken "type"
+  *> lift3
+       (fun pars id pv_types -> etype id pars pv_types)
+       pparameters
+       (pIdent <* pstoken "=")
+       (ptyps p)
 ;;
 
 let chainl1 e op =
@@ -439,6 +472,7 @@ let pack =
       ~failure_msg:"Failed to parse expr"
       [ letsin pack
       ; lets pack
+      ; pack.etype pack
       ; pack.econdition pack
       ; pack.ebinop pack
       ; pack.eapply pack
@@ -543,6 +577,7 @@ let pack =
   in
   let etuple pack = fix @@ fun _ -> parse_tuple_parens (value_parsers pack) etuple in
   let epv pack = fix @@ fun _ -> pepv @@ value_parsers pack in
+  let etype _ = fix @@ fun _ -> ptype ppvtype in
   { evalue
   ; econdition
   ; elet
@@ -556,6 +591,7 @@ let pack =
   ; elist
   ; etuple
   ; epv
+  ; etype
   ; expr
   }
 ;;
