@@ -716,6 +716,81 @@ let%expect_test _ =
        )) |}]
 ;;
 
+(** PVtype tests *)
+
+let%expect_test _ =
+  interprete_parse_result show_pvtype ppvtype "int";
+  [%expect {| TInt |}]
+;;
+
+let%expect_test _ =
+  interprete_parse_result show_pvtype ppvtype "string list";
+  [%expect {| (TList TString) |}]
+;;
+
+let%expect_test _ =
+  interprete_parse_result show_pvtype ppvtype "bool list list";
+  [%expect {| (TList (TList TBool)) |}]
+;;
+
+let%expect_test _ =
+  interprete_parse_result show_pvtype ppvtype "int * int";
+  [%expect {| (TTuple [TInt; TInt]) |}]
+;;
+
+let%expect_test _ =
+  interprete_parse_result show_pvtype ppvtype "int * string * bool";
+  [%expect {| (TTuple [TInt; TString; TBool]) |}]
+;;
+
+let%expect_test _ =
+  interprete_parse_result show_pvtype ppvtype "int * string list";
+  [%expect {| (TTuple [TInt; (TList TString)]) |}]
+;;
+
+let%expect_test _ =
+  interprete_parse_result show_pvtype ppvtype "(int * string) list";
+  [%expect {| (TList (TTuple [TInt; TString])) |}]
+;;
+
+let%expect_test _ =
+  interprete_parse_result
+    show_pvtype
+    ppvtype
+    "(fst_type * second_type list list) * (int * third_type) list";
+  [%expect
+    {|
+    (TTuple
+       [(TTuple [(TType "fst_type"); (TList (TList (TType "second_type")))]);
+         (TList (TTuple [TInt; (TType "third_type")]))]) |}]
+;;
+
+let%expect_test _ =
+  interprete_parse_result
+    show_pvtype
+    ppvtype
+    "env * (int list * bool) list * fst_type list * (int * int) list";
+  [%expect {|
+    (TTuple
+       [(TType "env"); (TList (TTuple [(TList TInt); TBool]));
+         (TList (TType "fst_type")); (TList (TTuple [TInt; TInt]))]) |}]
+;;
+
+let%expect_test _ =
+  interprete_parse_result show_pvtype ppvtype "int list * bool";
+  [%expect {| (TTuple [(TList TInt); TBool]) |}]
+;;
+
+let%expect_test _ =
+  interprete_parse_result show_pvtype ppvtype "my_type";
+  [%expect {| (TType "my_type") |}]
+;;
+
+let%expect_test _ =
+  interprete_parse_result show_pvtype ppvtype "my_type list";
+  [%expect {| (TList (TType "my_type")) |}]
+;;
+
 (** Expression tests *)
 
 (** Test binary operations *)
