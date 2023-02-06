@@ -44,9 +44,11 @@ and pvtype =
   | TTuple of pvtype list
   | TList of pvtype
   | TType of id
+  | TAny of id
   | TInt
   | TString
   | TBool
+  | TNoType
 [@@deriving show { with_path = false }]
 
 and expr =
