@@ -41,8 +41,34 @@ let unify2 map1 map2 =
     | Add map | Same map -> map)
 ;;
 
+let pp_list helper l sep =
+  let open Format in
+  pp_print_list ~pp_sep:(fun ppf _ -> fprintf ppf sep) (fun ppf ty -> helper ppf ty) l
+;;
+
+let pp_pv helper ppf l =
+  let open Format in
+  let c, l = l in
+  match l with
+  | [] -> fprintf ppf "%s" c
+  | _ -> fprintf ppf "%s of %a" c (fun ppf -> pp_list helper ppf " * ") l
+;;
+
 let pp_typ_letter ppf ty =
-  let rec get_subs subs index = function
+  let rec get_subs subs index =
+    let list_helper isubs iindex l =
+      List.fold l ~init:(isubs, iindex) ~f:(fun (s1, i1) ty ->
+        let s2, i2 = get_subs s1 i1 ty in
+        let subs = unify2 s1 s2 in
+        subs, i2)
+    in
+    let tag_helper subs index l =
+      List.fold l ~init:(subs, index) ~f:(fun (s, i) (_, ts) ->
+        let s1, i1 = list_helper s i ts in
+        let subs = unify2 s1 s in
+        subs, i1)
+    in
+    function
     | Ty_var n ->
       (match add_if_not_in subs n index with
        | Add subs -> subs, index + 1
@@ -55,16 +81,13 @@ let pp_typ_letter ppf ty =
       let subs = unify2 subs s2 in
       subs, i2
     | List t -> get_subs subs index t
-    | Tuple ts ->
-      List.fold ts ~init:(subs, index) ~f:(fun (s1, i1) ty ->
-        let s2, i2 = get_subs s1 i1 ty in
-        let subs = unify2 s1 s2 in
-        subs, i2)
+    | Tuple ts -> list_helper subs index ts
+    | MoreTags (_, pvs) -> tag_helper subs index pvs
+    | LessTags (_, pvs) -> tag_helper subs index pvs
   in
   let subs, _ = get_subs empty 0 ty in
-  let rec helper ppf =
-    let open Format in
-    function
+  let open Format in
+  let rec helper ppf = function
     | Ty_var n ->
       (match Map.find subs n with
        | Some v ->
@@ -74,14 +97,11 @@ let pp_typ_letter ppf ty =
     | Prim s -> pp_print_string ppf s
     | Arrow (l, r) -> fprintf ppf "(%a -> %a)" helper l helper r
     | List t -> fprintf ppf "%a list" helper t
-    | Tuple ts ->
-      fprintf
-        ppf
-        "(%a)"
-        (pp_print_list
-           ~pp_sep:(fun ppf _ -> fprintf ppf " * ")
-           (fun ppf ty -> fprintf ppf "%a" helper ty))
-        ts
+    | Tuple ts -> fprintf ppf "(%a)" (fun ppf -> pp_list helper ppf " * ") ts
+    | MoreTags (_, ts) ->
+      fprintf ppf "[> %a ]" (fun ppf -> pp_list (pp_pv helper) ppf " | ") ts
+    | LessTags (_, ts) ->
+      fprintf ppf "[< %a ]" (fun ppf -> pp_list (pp_pv helper) ppf " | ") ts
   in
   helper ppf ty
 ;;
@@ -93,12 +113,9 @@ let rec pp_typ_binder ppf =
   | Prim s -> pp_print_string ppf s
   | Arrow (l, r) -> fprintf ppf "(%a -> %a)" pp_typ_binder l pp_typ_binder r
   | List t -> fprintf ppf "%a list" pp_typ_binder t
-  | Tuple ts ->
-    fprintf
-      ppf
-      "(%a)"
-      (pp_print_list
-         ~pp_sep:(fun ppf _ -> fprintf ppf " * ")
-         (fun ppf ty -> fprintf ppf "%a" pp_typ_binder ty))
-      ts
+  | Tuple ts -> fprintf ppf "(%a)" (fun ppf -> pp_list pp_typ_binder ppf " * ") ts
+  | MoreTags (_, ts) ->
+    fprintf ppf "[ > %a]" (fun ppf -> pp_list (pp_pv pp_typ_binder) ppf " | ") ts
+  | LessTags (_, ts) ->
+    fprintf ppf "[ < %a]" (fun ppf -> pp_list (pp_pv pp_typ_binder) ppf "|") ts
 ;;
