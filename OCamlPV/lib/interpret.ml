@@ -46,6 +46,7 @@ type value =
   | VList of value list
   | VFun of pattern * expr * (id * value) list
   | VBinOp of value binop
+  | VPolyVariant of id * value list
   | VUnit
   | VNil
 [@@deriving show { with_path = false }]
@@ -171,6 +172,15 @@ end = struct
   ;;
 
   let rec eval expr env substs =
+    let eval_list l =
+      let* list =
+        List.fold l ~init:(return []) ~f:(fun l e ->
+          let* l = l in
+          let* evaled = eval e env [] in
+          return @@ (evaled :: l))
+      in
+      return (List.rev list)
+    in
     match expr with
     | EConst const ->
       (match const with
@@ -240,13 +250,11 @@ end = struct
       let res = VList (List.rev res) in
       return res
     | ETuple els ->
-      let* list =
-        List.fold els ~init:(return []) ~f:(fun l e ->
-          let* l = l in
-          let* evaled = eval e env [] in
-          return @@ (evaled :: l))
-      in
-      return @@ VTuple (List.rev list)
+      let* vls = eval_list els in
+      return (VTuple vls)
+    | EPolyVariant (id, exprs) ->
+      let* vls = eval_list exprs in
+      return (VPolyVariant (id, vls))
   ;;
 
   let run_expr env expr : ((string, value, 'a) Base.Map.t * value, ierror) t =

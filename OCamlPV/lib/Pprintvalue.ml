@@ -22,6 +22,8 @@ let rec pp_value ppf v =
   | VList l -> fprintf ppf "[%a]" (fun ppf -> pp_list ppf "; ") l
   | VFun (_, _, _) -> fprintf ppf "<fun>"
   | VBinOp binop -> fprintf ppf "%a" pp_binop binop
+  | VPolyVariant (id, values) ->
+    fprintf ppf "%s (%a)" id (fun ppf -> pp_list ppf ", ") values
   | VUnit -> fprintf ppf "()"
   | VNil -> fprintf ppf "[]"
 ;;
