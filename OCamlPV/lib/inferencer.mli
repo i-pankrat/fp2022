@@ -8,6 +8,7 @@ type error =
   | `Unification_failed of Typedtree.ty * Typedtree.ty
   | `Empty_pattern
   | `Empty_input
+  | `Not_implemented of string
   ]
 
 val pp_error : Format.formatter -> error -> unit

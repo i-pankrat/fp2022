@@ -19,11 +19,12 @@ type error =
   | `Unification_failed of ty * ty
   | `Empty_pattern
   | `Empty_input
+  | `Not_implemented of string
   ]
 
 let pp_error ppf : error -> _ = function
   | `Occurs_check -> Format.fprintf ppf "Typechecker error: occurs check failed"
-  | `No_variable s -> Format.fprintf ppf "Typechecker error:: undefined variable '%s'" s
+  | `No_variable s -> Format.fprintf ppf "Typechecker error: undefined variable '%s'" s
   | `Unification_failed (l, r) ->
     Format.fprintf
       ppf
@@ -34,6 +35,7 @@ let pp_error ppf : error -> _ = function
       r
   | `Empty_pattern -> Format.fprintf ppf "Typechecker error: empty pattern"
   | `Empty_input -> Format.fprintf ppf "Typechecker error: empty pattern"
+  | `Not_implemented s -> Format.fprintf ppf "Typechecker error: %s is not implemented" s
 ;;
 
 module R : sig
