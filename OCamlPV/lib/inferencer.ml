@@ -873,6 +873,109 @@ let%expect_test _ =
   [%expect {| (int * string * (int * bool)) |}]
 ;;
 
+(** Infer polymorphic variant type *)
+
+let%expect_test _ =
+  let open Ast in
+  let _ =
+    let e = [ ELetIn ("x", EConst (CInt 5), EPolyVariant ("`Some", [ EVar "x" ])) ] in
+    check_types e |> run_infer
+  in
+  [%expect {| [> `Some of int ] |}]
+;;
+
+let%expect_test _ =
+  let open Ast in
+  let _ =
+    let e =
+      [ EFun
+          ( PVar "x"
+          , EMatch
+              ( EVar "x"
+              , [ PPolyVariant ("`Some", [ PVar "x" ]), EVar "x"
+                ; PPolyVariant ("`None", []), EConst (CInt 0)
+                ] ) )
+      ]
+    in
+    check_types e |> run_infer
+  in
+  [%expect {| ([< `None | `Some of int ] -> int) |}]
+;;
+
+let%expect_test _ =
+  let open Ast in
+  let _ =
+    let e =
+      [ ELet
+          ( "test"
+          , EFun
+              ( PVar "x"
+              , EMatch
+                  ( EVar "x"
+                  , [ PPolyVariant ("`Some", [ PVar "x" ]), EVar "x"
+                    ; PPolyVariant ("`None", []), EConst (CInt 0)
+                    ] ) ) )
+      ]
+    in
+    check_types e |> run_infer
+  in
+  [%expect {| ([< `None | `Some of int ] -> int) |}]
+;;
+
+let%expect_test _ =
+  let open Ast in
+  let _ =
+    let e =
+      [ EList
+          ( EPolyVariant ("`Excelent", [ EConst (CInt 5) ])
+          , EList
+              ( EPolyVariant ("`Good", [ EConst (CInt 4) ])
+              , EList
+                  ( EPolyVariant ("`NotBad", [ EConst (CInt 3) ])
+                  , EList (EPolyVariant ("`Bad", [ EConst (CInt 2) ]), EConst CNil) ) ) )
+      ]
+    in
+    check_types e |> run_infer
+  in
+  [%expect {| [> `Excelent of int | `Good of int | `NotBad of int | `Bad of int ] list |}]
+;;
+
+let%expect_test _ =
+  let open Ast in
+  let _ =
+    let e =
+      [ EFun
+          ( PVar "x"
+          , EIfThenElse
+              ( EApply (EApply (EBinOp Eq, EVar "x"), EConst (CInt 10))
+              , EPolyVariant ("`Some", [ EVar "x" ])
+              , EPolyVariant ("`None", []) ) )
+      ]
+    in
+    check_types e |> run_infer
+  in
+  [%expect {| (int -> [> `Some of int | `None ]) |}]
+;;
+
+let%expect_test _ =
+  let open Ast in
+  let _ =
+    let e =
+      [ EFun
+          ( PVar "x"
+          , EMatch
+              ( EVar "x"
+              , [ PConst (CInt 0), EPolyVariant ("`None", [])
+                ; PConst (CInt 1), EPolyVariant ("`None", [])
+                ; PConst (CInt 2), EPolyVariant ("`Some", [ EVar "x" ])
+                ] ) )
+      ]
+    in
+    check_types e |> run_infer
+  in
+  [%expect {| (int -> [> `None | `Some of int ]) |}]
+;;
+
 (** Some test funcitons to type inferencer test*)
 
 let%expect_test _ =
@@ -1061,4 +1164,79 @@ let%expect_test _ =
     check_types e |> run_infer
   in
   [%expect {| ('a list -> 'a list) |}]
+;;
+
+let%expect_test _ =
+  let open Ast in
+  let _ =
+    let e =
+      [ ELet
+          ( "nth_opt"
+          , EFun
+              ( PVar "list"
+              , EFun
+                  ( PVar "number"
+                  , ELetRecIn
+                      ( "helper"
+                      , EFun
+                          ( PVar "l"
+                          , EFun
+                              ( PVar "n"
+                              , EMatch
+                                  ( EVar "l"
+                                  , [ PConst CNil, EPolyVariant ("`None", [])
+                                    ; ( PCons (PVar "hd", PVar "tl")
+                                      , EIfThenElse
+                                          ( EApply
+                                              ( EApply
+                                                  ( EBinOp Eq
+                                                  , EApply
+                                                      ( EApply (EBinOp Plus, EVar "n")
+                                                      , EConst (CInt 1) ) )
+                                              , EVar "number" )
+                                          , EPolyVariant ("`Some", [ EVar "hd" ])
+                                          , EApply
+                                              ( EApply (EVar "helper", EVar "tl")
+                                              , EApply
+                                                  ( EApply (EBinOp Plus, EVar "n")
+                                                  , EConst (CInt 1) ) ) ) )
+                                    ] ) ) )
+                      , EApply (EApply (EVar "helper", EVar "list"), EConst (CInt 0)) ) )
+              ) )
+      ]
+    in
+    check_types e |> run_infer
+  in
+  [%expect {| ('a list -> (int -> [> `None | `Some of 'a ])) |}]
+;;
+
+let%expect_test _ =
+  let open Ast in
+  let _ =
+    let e =
+      [ ELet
+          ( "find_opt"
+          , EFun
+              ( PVar "f"
+              , EFun
+                  ( PVar "list"
+                  , ELetRecIn
+                      ( "helper"
+                      , EFun
+                          ( PVar "l"
+                          , EMatch
+                              ( EVar "l"
+                              , [ PConst CNil, EPolyVariant ("`None", [])
+                                ; ( PCons (PVar "hd", PVar "tl")
+                                  , EIfThenElse
+                                      ( EApply (EVar "f", EVar "hd")
+                                      , EPolyVariant ("`Some", [ EVar "hd" ])
+                                      , EApply (EVar "helper", EVar "tl") ) )
+                                ] ) )
+                      , EApply (EVar "helper", EVar "list") ) ) ) )
+      ]
+    in
+    check_types e |> run_infer
+  in
+  [%expect {| (('a -> bool) -> ('a list -> [> `None | `Some of 'a ])) |}]
 ;;
