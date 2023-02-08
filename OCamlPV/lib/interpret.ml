@@ -297,13 +297,6 @@ end)
 
 let run = InterpretResult.run
 
-let interprete_eval_result test =
-  let open Format in
-  match run test with
-  | Result.Error e -> printf "%a" pp_ierror e
-  | Result.Ok res -> printf "%a" pp_value res
-;;
-
 (* Tests for interpretator *)
 
 (* (1 + 1) * (5 - 2) * (42 / 6) *)
@@ -491,9 +484,10 @@ let test =
   ]
 ;;
 
-let%expect_test _ =
-  interprete_eval_result test;
-  [%expect {| (VList [(VInt 2); (VInt 4); (VInt 6)]) |}]
+let%test _ =
+  match run test with
+  | Base.Result.Ok (VList [ VInt 2; VInt 4; VInt 6 ]) -> true
+  | _ -> false
 ;;
 
 (* List.fold function *)
@@ -537,4 +531,142 @@ let%test _ =
   match run test with
   | Base.Result.Ok (VInt 6) -> true
   | _ -> false
+;;
+
+(* List.nth_opt function *)
+let test n =
+  [ ELet
+      ( "nth_opt"
+      , EFun
+          ( PVar "list"
+          , EFun
+              ( PVar "number"
+              , ELetRecIn
+                  ( "helper"
+                  , EFun
+                      ( PVar "l"
+                      , EFun
+                          ( PVar "n"
+                          , EMatch
+                              ( EVar "l"
+                              , [ PConst CNil, EPolyVariant ("`None", [])
+                                ; ( PCons (PVar "hd", PVar "tl")
+                                  , EIfThenElse
+                                      ( EApply
+                                          ( EApply
+                                              ( EBinOp Eq
+                                              , EApply
+                                                  ( EApply (EBinOp Plus, EVar "n")
+                                                  , EConst (CInt 1) ) )
+                                          , EVar "number" )
+                                      , EPolyVariant ("`Some", [ EVar "hd" ])
+                                      , EApply
+                                          ( EApply (EVar "helper", EVar "tl")
+                                          , EApply
+                                              ( EApply (EBinOp Plus, EVar "n")
+                                              , EConst (CInt 1) ) ) ) )
+                                ] ) ) )
+                  , EApply (EApply (EVar "helper", EVar "list"), EConst (CInt 0)) ) ) ) )
+  ; ELet
+      ( "res"
+      , EApply
+          ( EApply
+              ( EVar "nth_opt"
+              , EList
+                  ( EConst (CInt 1)
+                  , EList (EConst (CInt 2), EList (EConst (CInt 3), EConst CNil)) ) )
+          , EConst (CInt n) ) )
+  ]
+;;
+
+let%test _ =
+  match run @@ test 2 with
+  | Base.Result.Ok (VPolyVariant ("`Some", [ VInt 2 ])) -> true
+  | _ -> false
+;;
+
+let%test _ =
+  match run @@ test 6 with
+  | Base.Result.Ok (VPolyVariant ("`None", [])) -> true
+  | _ -> false
+;;
+
+(* List.find_opt function *)
+
+let test n =
+  [ ELet
+      ( "find_opt"
+      , EFun
+          ( PVar "f"
+          , EFun
+              ( PVar "list"
+              , ELetRecIn
+                  ( "helper"
+                  , EFun
+                      ( PVar "l"
+                      , EMatch
+                          ( EVar "l"
+                          , [ PConst CNil, EPolyVariant ("`None", [])
+                            ; ( PCons (PVar "hd", PVar "tl")
+                              , EIfThenElse
+                                  ( EApply (EVar "f", EVar "hd")
+                                  , EPolyVariant ("`Some", [ EVar "hd" ])
+                                  , EApply (EVar "helper", EVar "tl") ) )
+                            ] ) )
+                  , EApply (EVar "helper", EVar "list") ) ) ) )
+  ; ELet
+      ( "res"
+      , EApply
+          ( EApply
+              ( EVar "find_opt"
+              , EFun (PVar "x", EApply (EApply (EBinOp Eq, EConst (CInt n)), EVar "x")) )
+          , EList
+              ( EConst (CInt 1)
+              , EList (EConst (CInt 2), EList (EConst (CInt 3), EConst CNil)) ) ) )
+  ]
+;;
+
+let%test _ =
+  match run @@ test 3 with
+  | Base.Result.Ok (VPolyVariant ("`Some", [ VInt 3 ])) -> true
+  | _ -> false
+;;
+
+let%test _ =
+  match run @@ test 6 with
+  | Base.Result.Ok (VPolyVariant ("`None", [])) -> true
+  | _ -> false
+;;
+
+let test n =
+  [ ELet
+      ( "find_opt"
+      , EFun
+          ( PVar "f"
+          , EFun
+              ( PVar "list"
+              , ELetRecIn
+                  ( "helper"
+                  , EFun
+                      ( PVar "l"
+                      , EMatch
+                          ( EVar "l"
+                          , [ PConst CNil, EPolyVariant ("`None", [])
+                            ; ( PCons (PVar "hd", PVar "tl")
+                              , EIfThenElse
+                                  ( EApply (EVar "f", EVar "hd")
+                                  , EPolyVariant ("`Some", [ EVar "hd" ])
+                                  , EApply (EVar "helper", EVar "tl") ) )
+                            ] ) )
+                  , EApply (EVar "helper", EVar "list") ) ) ) )
+  ; ELet
+      ( "res"
+      , EApply
+          ( EApply
+              ( EVar "find_opt"
+              , EFun (PVar "x", EApply (EApply (EBinOp Eq, EConst (CInt n)), EVar "x")) )
+          , EList
+              ( EConst (CInt 1)
+              , EList (EConst (CInt 2), EList (EConst (CInt 3), EConst CNil)) ) ) )
+  ]
 ;;
