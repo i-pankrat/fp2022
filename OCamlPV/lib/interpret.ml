@@ -20,6 +20,7 @@ type ierror =
   | `UnsupportedOperation
   | `PatternMismatch
   | `EmptyInput
+  | `NotImplemented of string
   ]
 
 let pp_ierror ppf : ierror -> unit =
@@ -31,6 +32,7 @@ let pp_ierror ppf : ierror -> unit =
   | `UnsupportedOperation -> fprintf ppf "Runtime error: unsupported operation"
   | `PatternMismatch -> fprintf ppf "Runtime error: pattern mismatch"
   | `EmptyInput -> fprintf ppf "Runtime error: empty input to interpret"
+  | `NotImplemented s -> fprintf ppf "Runtime error: %s is not implemented" s
 ;;
 
 type 'a binop =
@@ -255,6 +257,7 @@ end = struct
     | EPolyVariant (id, exprs) ->
       let* vls = eval_list exprs in
       return (VPolyVariant (id, vls))
+    | EType _ -> fail (`NotImplemented "type")
   ;;
 
   let run_expr env expr : ((string, value, 'a) Base.Map.t * value, ierror) t =

@@ -14,6 +14,7 @@ type value =
   | VList of value list
   | VFun of Ast.pattern * Ast.expr * (Ast.id * value) list
   | VBinOp of value binop
+  | VPolyVariant of Ast.id * value list
   | VUnit
   | VNil
 
