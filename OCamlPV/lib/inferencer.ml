@@ -88,20 +88,34 @@ type fresh = int
 module Type = struct
   type t = ty
 
-  let rec occurs_in v = function
+  let rec occurs_in v =
+    let occurs_in_list ts =
+      List.fold ts ~init:false ~f:(fun acc t -> occurs_in v t || acc)
+    in
+    let occurs_in_tag pvlist =
+      List.fold pvlist ~init:false ~f:(fun acc (_, l) -> occurs_in_list l || acc)
+    in
+    function
     | Ty_var b -> b = v
     | Arrow (l, r) -> occurs_in v l || occurs_in v r
     | List t -> occurs_in v t
-    | Tuple ts -> List.fold ts ~init:false ~f:(fun acc t -> occurs_in v t || acc)
+    | Tuple ts -> occurs_in_list ts
+    | MoreTags (_, ls) | LessTags (_, ls) -> occurs_in_tag ls
     | Prim _ -> false
   ;;
 
   let free_vars =
-    let rec helper acc = function
+    let rec helper acc =
+      let free_list acc ts = List.fold ts ~init:acc ~f:(fun acc t -> helper acc t) in
+      let free_tag acc pvlist =
+        List.fold pvlist ~init:acc ~f:(fun acc (_, l) -> free_list acc l)
+      in
+      function
       | Ty_var b -> VarSetInit.add b acc
       | Arrow (l, r) -> helper (helper acc l) r
       | List t -> helper acc t
-      | Tuple ts -> List.fold ts ~init:acc ~f:(fun acc t -> helper acc t)
+      | Tuple ts -> free_list acc ts
+      | MoreTags (_, pv) | LessTags (_, pv) -> free_tag acc pv
       | Prim _ -> acc
     in
     helper VarSetInit.empty
@@ -159,20 +173,63 @@ end = struct
   let remove m f = Map.Poly.remove m f
 
   let apply subst =
-    let rec helper = function
+    let rec helper =
+      let apply_to_list l = List.map ~f:(fun t -> helper t) l in
+      let apply_to_tag pvs = List.map ~f:(fun (c, t) -> c, apply_to_list t) pvs in
+      let process_tag bind pvs constructor =
+        match find_exn bind subst with
+        | exception Not_found_s _ -> constructor bind (apply_to_tag pvs)
+        | x -> x
+      in
+      function
       | Ty_var b as ty ->
         (match find_exn b subst with
          | exception Not_found_s _ -> ty
          | x -> x)
       | Arrow (l, r) -> Arrow (helper l, helper r)
       | List t -> List (helper t)
-      | Tuple l -> Tuple (List.map ~f:(fun t -> helper t) l)
+      | Tuple l -> Tuple (apply_to_list l)
+      | MoreTags (bind, pvs) -> process_tag bind pvs moretags_typ
+      | LessTags (bind, pvs) -> process_tag bind pvs lesstags_typ
       | other -> other
     in
     helper
   ;;
 
   let rec unify l r =
+    let unify_lists l1 l2 =
+      let subs =
+        List.fold2 l1 l2 ~init:(return empty) ~f:(fun subs a b ->
+          let* subs = subs in
+          let sa = apply subs a in
+          let sb = apply subs b in
+          let* sub1 = unify sa sb in
+          compose subs sub1)
+      in
+      match subs with
+      | Ok res -> res
+      | Unequal_lengths -> fail (`Unification_failed (l, r))
+    in
+    let process_tags bind1 tag1 bind2 tag2 constructor =
+      if bind1 != bind2
+      then
+        let* fr = fresh in
+        let tag =
+          constructor
+            fr
+            (List.fold_right
+               tag1
+               ~f:(fun new_el list ->
+                 if List.exists ~f:(fun el -> equal_pv new_el el) list
+                 then list
+                 else new_el :: list)
+               ~init:tag2)
+        in
+        let* subs1 = singleton bind1 tag in
+        let* subs2 = singleton bind2 tag in
+        compose subs1 subs2
+      else return empty
+    in
     match l, r with
     | Prim l, Prim r when String.equal l r -> return empty
     | Prim _, Prim _ -> fail (`Unification_failed (l, r))
@@ -183,18 +240,11 @@ end = struct
       let* subs2 = unify (apply subs1 r1) (apply subs1 r2) in
       compose subs1 subs2
     | List a, List b -> unify a b
-    | Tuple a, Tuple b ->
-      let subs =
-        List.fold2 a b ~init:(return empty) ~f:(fun subs a b ->
-          let* subs = subs in
-          let sa = apply subs a in
-          let sb = apply subs b in
-          let* sub1 = unify sa sb in
-          compose subs sub1)
-      in
-      (match subs with
-       | Ok res -> res
-       | Unequal_lengths -> fail (`Unification_failed (l, r)))
+    | Tuple a, Tuple b -> unify_lists a b
+    | MoreTags (bind1, tag1), MoreTags (bind2, tag2) ->
+      process_tags bind1 tag1 bind2 tag2 moretags_typ
+    | LessTags (bind1, tag1), LessTags (bind2, tag2) ->
+      process_tags bind1 tag1 bind2 tag2 lesstags_typ
     | _ -> fail (`Unification_failed (l, r))
 
   and extend key value extensible_subst =
@@ -324,7 +374,18 @@ let pp_env subst ppf env =
 let infer =
   let open Ast in
   let rec (pattern_helper : TypeEnv.t -> Ast.pattern -> (TypeEnv.t * ty) R.t) =
-   fun env -> function
+   fun env ->
+    let rec eval_list_helper envpat =
+      let* env, patterns = envpat in
+      match patterns with
+      | [] -> return (env, [])
+      | hd :: tl ->
+        let* envhd, tyhd = pattern_helper env hd in
+        let new_envpat = return (envhd, tl) in
+        let* envtl, tytl = eval_list_helper new_envpat in
+        return (envtl, tyhd :: tytl)
+    in
+    function
     | PConst const ->
       (match const with
        | CBool _ -> return (env, Prim "bool")
@@ -339,18 +400,7 @@ let infer =
       let env = TypeEnv.extend env (id, S (VarSet.empty, tv)) in
       return (env, tv)
     | PTuple tuple ->
-      let rec tuple_helper envpat =
-        let* env, patterns = envpat in
-        match patterns with
-        | [] -> return (env, [])
-        | hd :: tl ->
-          let* envhd, tyhd = pattern_helper env hd in
-          let new_envpat = return (envhd, tl) in
-          let* envtl, tytl = tuple_helper new_envpat in
-          return (envtl, tyhd :: tytl)
-      in
-      let initvalue = return (env, tuple) in
-      let* finenv, fintys = tuple_helper initvalue in
+      let* finenv, fintys = eval_list_helper @@ return (env, tuple) in
       return (finenv, Tuple fintys)
     | PCons (head, tail) ->
       let* env, ty1 = pattern_helper env head in
@@ -359,6 +409,10 @@ let infer =
       let* subst = unify ty1 ty2 in
       let finenv = TypeEnv.apply subst env in
       return (finenv, Subst.apply subst ty1)
+    | PPolyVariant (name, args) ->
+      let* finenv, fintys = eval_list_helper @@ return (env, args) in
+      let* tv = fresh in
+      return (finenv, lesstags_typ tv [ name, fintys ])
     | PWild ->
       let* ty = fresh_var in
       return (env, ty)
@@ -402,10 +456,9 @@ let infer =
       let* s4 = unify t1 (Prim "bool") in
       let* s5 = unify t2 t3 in
       let* final_subst = Subst.compose_all [ s5; s4; s3; s2; s1 ] in
-      return (final_subst, Subst.apply s5 t2)
+      return (final_subst, Subst.apply final_subst t2)
     | ELet (_, e) ->
       let* s, t = helper env e in
-      (* let env = TypeEnv.apply s env in *)
       return (s, t)
     | ELetIn (name, e1, e2) ->
       let* s1, t1 = helper env e1 in
@@ -477,6 +530,20 @@ let infer =
             return (subst, t :: tuple))
       in
       return (s, tuple_typ @@ List.rev t)
+    | EPolyVariant (constructor, args) ->
+      let* s, t =
+        List.fold
+          args
+          ~init:(return (Subst.empty, []))
+          ~f:(fun acc expr ->
+            let* pv_s, pv = acc in
+            let* s, t = helper env expr in
+            let* subst = Subst.compose s pv_s in
+            return (subst, t :: pv))
+      in
+      let* fv = fresh in
+      return (s, moretags_typ fv [ constructor, t ])
+    | EType (_, _, _) -> fail (`Not_implemented "type")
   in
   helper
 ;;
