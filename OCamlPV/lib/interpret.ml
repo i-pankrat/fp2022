@@ -675,3 +675,35 @@ let test n =
               , EList (EConst (CInt 2), EList (EConst (CInt 3), EConst CNil)) ) ) )
   ]
 ;;
+
+let test name constr =
+  [ ELet
+      ( "transform_res"
+      , EFun
+          ( PVar "res"
+          , EMatch
+              ( EVar "res"
+              , [ ( PPolyVariant ("`None", [])
+                  , EPolyVariant
+                      ("`Error", [ EConst (CString "Failed to get the result") ]) )
+                ; PPolyVariant ("`Some", [ PVar "x" ]), EPolyVariant ("`Ok", [ EVar "x" ])
+                ] ) ) )
+  ; ELet ("res", EApply (EVar "transform_res", EPolyVariant (name, constr)))
+  ]
+;;
+
+let%test _ =
+  let open Format in
+  match run @@ test "`None" [] with
+  | Base.Result.Ok (VPolyVariant ("`Error", [ VString "Failed to get the result" ])) ->
+    true
+  | _ -> false
+;;
+
+let%test _ =
+  let open Format in
+  let constr = [ EConst (CString "Success") ] in
+  match run @@ test "`Some" constr with
+  | Base.Result.Ok (VPolyVariant ("`Ok", [ VString "Success" ])) -> true
+  | _ -> false
+;;
