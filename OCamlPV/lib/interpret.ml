@@ -21,6 +21,7 @@ type ierror =
   | `PatternMismatch
   | `EmptyInput
   | `NotImplemented of string
+  | `Unreachable
   ]
 
 let pp_ierror ppf : ierror -> unit =
@@ -33,6 +34,10 @@ let pp_ierror ppf : ierror -> unit =
   | `PatternMismatch -> fprintf ppf "Runtime error: pattern mismatch"
   | `EmptyInput -> fprintf ppf "Runtime error: empty input to interpret"
   | `NotImplemented s -> fprintf ppf "Runtime error: %s is not implemented" s
+  | `Unreachable ->
+    fprintf
+      ppf
+      "Runtime error: oops... This was never supposed to happen. Report the bug, please."
 ;;
 
 type 'a binop =
@@ -94,13 +99,13 @@ end = struct
 
   let eval_binop arg =
     let eval_comparison = function
-      | Eq -> Poly.( = )
-      | Neq -> Poly.( <> )
-      | Gt -> Poly.( > )
-      | Lt -> Poly.( < )
-      | Gtq -> Poly.( >= )
-      | Ltq -> Poly.( <= )
-      | _ -> failwith "Unsupported operation. TODO: fix that"
+      | Eq -> return Poly.( = )
+      | Neq -> return Poly.( <> )
+      | Gt -> return Poly.( > )
+      | Lt -> return Poly.( < )
+      | Gtq -> return Poly.( >= )
+      | Ltq -> return Poly.( <= )
+      | _ -> fail `Unreachable
     in
     function
     | EmptyBinOp op ->
@@ -119,7 +124,7 @@ end = struct
        | Lt, _
        | Gtq, _
        | Ltq, _ -> return @@ cvbinop @@ PartialBinOp (arg, op)
-       | _ -> failwith "TODO 10")
+       | _ -> fail `Unreachable)
     | PartialBinOp (farg, op) ->
       (match op, farg, arg with
        | Plus, VInt i1, VInt i2 -> return @@ cvint (i1 + i2)
@@ -133,10 +138,16 @@ end = struct
        | Or, VBool b1, VBool b2 -> return @@ cvbool (b1 || b2)
        | ConsConcat, _, VList list -> return @@ VList (farg :: list)
        | ConsConcat, _, VNil -> return @@ VList (farg :: [])
-       | op, VInt i1, VInt i2 -> return @@ cvbool @@ (eval_comparison op) i1 i2
-       | op, VBool b1, VBool b2 -> return @@ cvbool @@ (eval_comparison op) b1 b2
-       | op, VString s1, VString s2 -> return @@ cvbool @@ (eval_comparison op) s1 s2
-       | _ -> failwith "NEVER SHOULD HAPPEN")
+       | op, VInt i1, VInt i2 ->
+         let* comp = eval_comparison op in
+         return @@ cvbool @@ comp i1 i2
+       | op, VBool b1, VBool b2 ->
+         let* comp = eval_comparison op in
+         return @@ cvbool @@ comp b1 b2
+       | op, VString s1, VString s2 ->
+         let* comp = eval_comparison op in
+         return @@ cvbool @@ comp s1 s2
+       | _ -> fail `Unreachable)
   ;;
 
   let rec eval_pattern =
@@ -195,7 +206,7 @@ end = struct
        | CBool b -> return @@ cvbool b
        | CString s -> return @@ cvstring s
        | CNil -> return VNil
-       | _ -> failwith "TODO3")
+       | CUnit -> return VUnit)
     | EFun (pat, expr) -> return @@ cvfun pat expr substs
     | EVar var -> find env var
     | EApply (func, arg) ->
@@ -208,13 +219,13 @@ end = struct
          let* env = extend env evaled_pat in
          eval expr env (evaled_pat @ substs)
        | VBinOp op -> eval_binop evaled_arg op
-       | _ -> failwith "TODO")
+       | _ -> fail `Unreachable)
     | EBinOp op -> return @@ cvbinop @@ EmptyBinOp op
     | EIfThenElse (c, t, e) ->
       let* evaled_condtion = eval c env [] in
       (match evaled_condtion with
        | VBool res -> if res then eval t env [] else eval e env []
-       | _ -> failwith "Typechecker already checked that :)")
+       | _ -> fail `Unreachable)
     | EMatch (matched, patterns) ->
       let* evaled_match = eval matched env [] in
       let rec eval_match_expr = function
