@@ -9,7 +9,8 @@
   Printer
   Pprintvalue
   Pprinttypedtree
-  Typedtree)
+  Typedtree
+  Stdlib)
  (libraries base angstrom)
  (preprocess
   (pps ppx_expect ppx_deriving.show ppx_deriving.eq))
