@@ -139,7 +139,19 @@ end = struct
        | _ -> failwith "NEVER SHOULD HAPPEN")
   ;;
 
-  let rec eval_pattern = function
+  let rec eval_pattern =
+    let eval_lists pt vt =
+      let pat =
+        List.fold2 pt vt ~init:(return []) ~f:(fun acc p v ->
+          let* evaled = eval_pattern (p, v) in
+          let* acc = acc in
+          return (evaled @ acc))
+      in
+      match pat with
+      | Ok res -> res
+      | Unequal_lengths -> fail `PatternMismatch
+    in
+    function
     | PWild, _ -> return []
     | PVar name, value -> return [ name, value ]
     | PConst const, cvalue ->
@@ -160,16 +172,9 @@ end = struct
          let* evaledtl = eval_pattern (t, VList tl) in
          return @@ evaledhd @ evaledtl
        | _ -> fail `PatternMismatch)
-    | PTuple pt, VTuple vt ->
-      let pat =
-        List.fold2 pt vt ~init:(return []) ~f:(fun acc p v ->
-          let* evaled = eval_pattern (p, v) in
-          let* acc = acc in
-          return (evaled @ acc))
-      in
-      (match pat with
-       | Ok res -> res
-       | Unequal_lengths -> fail `PatternMismatch)
+    | PTuple pt, VTuple vt -> eval_lists pt vt
+    | PPolyVariant (constr1, args1), VPolyVariant (constr2, args2) ->
+      if Poly.( = ) constr1 constr2 then eval_lists args1 args2 else fail `PatternMismatch
     | _ -> fail `PatternMismatch
   ;;
 
