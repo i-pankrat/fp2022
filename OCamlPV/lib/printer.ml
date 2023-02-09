@@ -12,9 +12,9 @@ let print_program program =
   match Parser.parse program with
   | Ok ast ->
     (match Inferencer.check_types ast with
-     | Ok typ ->
+     | Ok (_, typ) ->
        (match Interpret.run ast with
-        | Ok res -> printf "%a" pp_result (res, typ)
+        | Ok (_, res) -> printf "%a" pp_result (res, typ)
         | Error e -> printf "%a" Interpret.pp_ierror e)
      | Error e -> printf "%a" Inferencer.pp_error e)
   | Error e -> printf "%a" Parser.pp_error e

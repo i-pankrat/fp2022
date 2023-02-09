@@ -93,6 +93,28 @@ List.filter
   > let result = (list_filter [1; 2; 3; 4; 5; 6; 7] (fun x -> x >= 5))
   > EOF
   - : int list = [5; 6; 7]
+List.nth_opt
+  $ ./demo.exe <<- EOF
+  > let nth_opt list number =
+  >   let rec helper l n =
+  >     match l with
+  >     | [] -> \`None
+  >     | hd :: tl -> if (n + 1) = number then \`Some hd else (helper tl (n + 1))
+  >   in
+  >   (helper list 0)
+  > EOF
+  - : ('a list -> (int -> [> `None | `Some of 'a ])) = <fun>
+List.find_opt
+  $ ./demo.exe <<- EOF
+  > let find_opt f list =
+  >   let rec helper l =
+  >     match l with
+  >     | [] -> \`None
+  >     | hd :: tl -> if (f hd) then \`Some hd else (helper tl)
+  >   in
+  >   (helper list)
+  > EOF
+  - : (('a -> bool) -> ('a list -> [> `None | `Some of 'a ])) = <fun>
 fst
   $ ./demo.exe <<- EOF
   > let fst (f, s) = f;;
