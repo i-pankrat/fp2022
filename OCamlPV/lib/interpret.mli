@@ -19,6 +19,8 @@ type value =
   | VNil
 
 type ierror
+type environment
 
 val pp_ierror : Format.formatter -> ierror -> unit
-val run : Ast.expr list -> (value, ierror) result
+val empty : environment
+val run : ?env:environment -> Ast.expr list -> (environment * value, ierror) result

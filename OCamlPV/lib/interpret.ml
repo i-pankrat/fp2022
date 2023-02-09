@@ -87,7 +87,7 @@ module Env (M : FailMonad) = struct
 end
 
 module Interpret (M : FailMonad) : sig
-  val run : expr list -> (value, ierror) M.t
+  val run : ?env:environment -> expr list -> (environment * value, ierror) M.t
 end = struct
   open M
   open Env (M)
@@ -178,7 +178,7 @@ end = struct
     | _ -> fail `PatternMismatch
   ;;
 
-  let rec eval expr env substs =
+  let rec eval expr env substs : (value, ierror) t =
     let eval_list l =
       let* list =
         List.fold l ~init:(return []) ~f:(fun l e ->
@@ -265,7 +265,7 @@ end = struct
     | EType _ -> fail (`NotImplemented "type")
   ;;
 
-  let run_expr env expr : ((string, value, 'a) Base.Map.t * value, ierror) t =
+  let run_expr env expr : (environment * value, ierror) t =
     let* value = eval expr env [] in
     match expr with
     | ELet (name, _) | ELetIn (name, _, _) | ELetRec (name, _) | ELetRecIn (name, _, _) ->
@@ -274,17 +274,17 @@ end = struct
     | _ -> return (env, value)
   ;;
 
-  let run program =
+  let run ?(env : environment = empty) program : (environment * value, ierror) t =
     let rec helper env = function
       | [] -> fail `EmptyInput
       | hd :: [] ->
-        let* _, value = run_expr env hd in
-        return value
+        let* env, value = run_expr env hd in
+        return (env, value)
       | hd :: tl ->
         let* env, _ = run_expr env hd in
         helper env tl
     in
-    helper empty program
+    helper env program
   ;;
 end
 
@@ -301,6 +301,13 @@ module InterpretResult = Interpret (struct
 end)
 
 let run = InterpretResult.run
+let empty : environment = Base.Map.empty (module Base.String)
+
+let run_test t =
+  match run t with
+  | Result.Ok (_, ty) -> Result.Ok ty
+  | Result.Error e -> Result.Error e
+;;
 
 (* Tests for interpretator *)
 
@@ -319,7 +326,7 @@ let test =
 ;;
 
 let%test _ =
-  match run test with
+  match run_test test with
   | Base.Result.Ok (VInt 42) -> true
   | _ -> false
 ;;
@@ -334,7 +341,7 @@ let test =
 ;;
 
 let%test _ =
-  match run test with
+  match run_test test with
   | Base.Result.Ok (VInt 6) -> true
   | _ -> false
 ;;
@@ -367,7 +374,7 @@ let test =
 ;;
 
 let%test _ =
-  match run test with
+  match run_test test with
   | Base.Result.Ok (VInt 5050) -> true
   | _ -> false
 ;;
@@ -395,7 +402,7 @@ let test =
 ;;
 
 let%test _ =
-  match run test with
+  match run_test test with
   | Base.Result.Ok (VInt 987) -> true
   | _ -> false
 ;;
@@ -421,7 +428,7 @@ let test =
 ;;
 
 let%test _ =
-  match run test with
+  match run_test test with
   | Base.Result.Ok (VInt 120) -> true
   | _ -> false
 ;;
@@ -457,7 +464,7 @@ let test =
 ;;
 
 let%test _ =
-  match run test with
+  match run_test test with
   | Base.Result.Ok (VInt 6) -> true
   | _ -> false
 ;;
@@ -490,7 +497,7 @@ let test =
 ;;
 
 let%test _ =
-  match run test with
+  match run_test test with
   | Base.Result.Ok (VList [ VInt 2; VInt 4; VInt 6 ]) -> true
   | _ -> false
 ;;
@@ -533,7 +540,7 @@ let test =
 ;;
 
 let%test _ =
-  match run test with
+  match run_test test with
   | Base.Result.Ok (VInt 6) -> true
   | _ -> false
 ;;
@@ -585,13 +592,13 @@ let test n =
 ;;
 
 let%test _ =
-  match run @@ test 2 with
+  match run_test @@ test 2 with
   | Base.Result.Ok (VPolyVariant ("`Some", [ VInt 2 ])) -> true
   | _ -> false
 ;;
 
 let%test _ =
-  match run @@ test 6 with
+  match run_test @@ test 6 with
   | Base.Result.Ok (VPolyVariant ("`None", [])) -> true
   | _ -> false
 ;;
@@ -632,13 +639,13 @@ let test n =
 ;;
 
 let%test _ =
-  match run @@ test 3 with
+  match run_test @@ test 3 with
   | Base.Result.Ok (VPolyVariant ("`Some", [ VInt 3 ])) -> true
   | _ -> false
 ;;
 
 let%test _ =
-  match run @@ test 6 with
+  match run_test @@ test 6 with
   | Base.Result.Ok (VPolyVariant ("`None", [])) -> true
   | _ -> false
 ;;
@@ -694,7 +701,7 @@ let test name constr =
 
 let%test _ =
   let open Format in
-  match run @@ test "`None" [] with
+  match run_test @@ test "`None" [] with
   | Base.Result.Ok (VPolyVariant ("`Error", [ VString "Failed to get the result" ])) ->
     true
   | _ -> false
@@ -703,7 +710,7 @@ let%test _ =
 let%test _ =
   let open Format in
   let constr = [ EConst (CString "Success") ] in
-  match run @@ test "`Some" constr with
+  match run_test @@ test "`Some" constr with
   | Base.Result.Ok (VPolyVariant ("`Ok", [ VString "Success" ])) -> true
   | _ -> false
 ;;
