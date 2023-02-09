@@ -12,4 +12,12 @@ type error =
   ]
 
 val pp_error : Format.formatter -> error -> unit
-val check_types : Ast.expr list -> (Typedtree.ty, error) result
+
+type environment
+
+val empty : environment
+
+val check_types
+  :  ?env:environment
+  -> Ast.expr list
+  -> (environment * Typedtree.ty, error) result

@@ -313,8 +313,10 @@ module Scheme = struct
   let pp = pp_scheme
 end
 
+type environment = (string * scheme) list
+
 module TypeEnv = struct
-  type t = (string * scheme) list
+  type t = environment
 
   let extend e h = h :: e
   let empty = []
@@ -550,26 +552,34 @@ let infer =
   helper
 ;;
 
-let check_types program =
+let empty : environment = TypeEnv.empty
+
+let check_type env expr =
+  let* _, typ = infer env expr in
+  match expr with
+  | ELet (name, _) | ELetIn (name, _, _) | ELetRec (name, _) | ELetRecIn (name, _, _) ->
+    let env = TypeEnv.extend env (name, S (VarSet.empty, typ)) in
+    return (env, typ)
+  | _ -> return (env, typ)
+;;
+
+let check_types env program =
   let rec helper env = function
     | [] -> fail `Empty_input
     | hd :: [] ->
-      let* _, typ = infer env hd in
-      return typ
+      let* env, typ = check_type env hd in
+      return (env, typ)
     | hd :: tl ->
-      let* _, typ = infer env hd in
-      let env =
-        match hd with
-        | ELet (name, _) | ELetIn (name, _, _) | ELetRec (name, _) | ELetRecIn (name, _, _)
-          -> TypeEnv.extend env (name, S (VarSet.empty, typ))
-        | _ -> env
-      in
+      let* env, _ = check_type env hd in
       helper env tl
   in
-  helper TypeEnv.empty program
+  helper env program
 ;;
 
-let check_types e = Result.map (run (check_types e)) ~f:Fun.id
+let check_types ?(env : environment = empty) e =
+  Result.map (run (check_types env e)) ~f:Fun.id
+;;
+
 let unify = Subst.unify
 
 (** Unification tests *)
@@ -644,7 +654,7 @@ let%expect_test _ =
 
 let run_infer = function
   | Result.Error e -> Format.printf "Error: %a%!" pp_error e
-  | Result.Ok typed -> Format.printf "%a%!" Pprinttypedtree.pp_typ_letter typed
+  | Result.Ok (_, typed) -> Format.printf "%a%!" Pprinttypedtree.pp_typ_letter typed
 ;;
 
 (** Infer constant type*)
