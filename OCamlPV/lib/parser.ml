@@ -32,10 +32,8 @@ let is_uletter = function
   | _ -> false
 ;;
 
-let is_fst_symbol ch = is_lletter ch || Poly.( = ) ch '_'
-
 let is_ident_symbol = function
-  | c -> is_fst_symbol c || is_uletter c || is_digit c
+  | c -> is_lletter c || is_uletter c || is_digit c || Char.equal c '_'
 ;;
 
 let is_kw = function
@@ -72,7 +70,9 @@ let cnill = CNil
 let psign = choice [ pparens @@ (pstoken "-" *> return (-1)); pstoken "" *> return 1 ]
 
 let pcint =
-  lift2 (fun s v -> cint (s * Int.of_string v)) psign (token @@ take_while1 is_digit)
+  let pdigit = token @@ take_while1 is_digit in
+  lift (fun s -> cint @@ Int.of_string s) pdigit
+  <|> lift2 (fun s v -> cint (s * Int.of_string v)) psign pdigit
 ;;
 
 let pcbool = return Bool.of_string <*> (pstoken "true" <|> pstoken "false") >>| cbool
@@ -83,18 +83,48 @@ let pconst = pcint <|> pcbool <|> pcstring <|> pcnil <|> pcunit
 
 (** Parse ident *)
 
-let pfstsymbol = empty *> satisfy is_fst_symbol
-let pIdent = take_while is_ident_symbol
-
-let pIdent =
-  lift2 (fun f ident -> Format.sprintf "%c%s" f ident) pfstsymbol pIdent
-  >>= fun res -> if is_kw res || is_prohibited res then fail "keyword" else return res
+let pIdent cond =
+  empty *> take_while1 cond
+  >>= fun res ->
+  if is_kw res
+  then fail "You can not use keywords as vars"
+  else if is_prohibited res
+  then fail "You identifier containt prohibited symbols"
+  else if Char.is_digit @@ String.get res 0
+  then fail "Identifier first sumbol is letter, not digit"
+  else return res
 ;;
 
+let pcIdent =
+  pIdent is_ident_symbol
+  >>= fun res ->
+  if String.length res == 0
+  then fail "Not identifier"
+  else if Char.is_uppercase @@ String.get res 0
+  then return res
+  else fail "Not uppercase identifier"
+;;
+
+let psIdent =
+  pIdent is_ident_symbol
+  >>= fun res ->
+  if Char.is_uppercase @@ String.get res 0
+  then fail "Not small identifier"
+  else return res
+;;
+
+let is_constr_symbol c = is_ident_symbol c || Char.equal c '`'
+
 let ppvconstructor =
-  empty
-  *> char '`'
-  *> lift2 (fun fst ident -> Format.sprintf "`%c%s" fst ident) (satisfy is_uletter) pIdent
+  pIdent is_constr_symbol
+  >>= fun res ->
+  if String.length res < 2
+  then fail "Poly variant constructor has to contain at least 2 symbols"
+  else if not (Char.equal '`' @@ String.get res 0)
+  then fail "Poly variant constructor has to start with '`'"
+  else if not (Char.is_uppercase @@ String.get res 1)
+  then fail "Poly variant constructor has to be uppercase"
+  else return res
 ;;
 
 (** Pattern constructors *)
@@ -107,7 +137,7 @@ let construct_pv i c = PPolyVariant (i, c)
 (** Parse patterns *)
 
 let ppconst = pconst >>| fun x -> PConst x
-let ppvar = pIdent >>| fun x -> PVar x
+let ppvar = psIdent >>| fun x -> PVar x
 let pwild = pstoken "_" *> return PWild
 let ppv_noargs decl = ppvconstructor >>= fun constr -> return @@ decl constr []
 let ppv_arg p decl = lift2 (fun constr arg -> decl constr [ arg ]) ppvconstructor p
@@ -221,12 +251,12 @@ let cpvlist v l =
   helper l
 ;;
 
-let pparameter = (fun res -> Format.sprintf "'%s" res) <$> pstoken "'" *> pIdent
+let pparameter = (fun res -> Format.sprintf "'%s" res) <$> pstoken "'" *> psIdent
 let ppvint = lift (fun _ -> cpvint) (pstoken "int")
 let ppvbool = lift (fun _ -> cpvbool) (pstoken "bool")
 let ppvstring = lift (fun _ -> cpvstring) (pstoken "string")
 let ppvany = lift (fun any -> cpvany any) pparameter
-let ppvtype = lift (fun typ -> cpvtype typ) pIdent
+let ppvtype = lift (fun typ -> cpvtype typ) psIdent
 let ppvlist p = lift (fun l -> cpvlist l) (p <* many1 (pstoken "list"))
 let ppvlist p = lift2 (fun t l -> cpvlist t l) p (many1 (pstoken "list"))
 
@@ -292,7 +322,7 @@ let etype id par pvtyp = EType (id, par, pvtyp)
 
 (** Parse expr *)
 
-let pevar = evar <$> pIdent
+let pevar = evar <$> psIdent
 let peconst = pconst >>| fun x -> EConst x
 let parens_or_not p = p <|> pparens p
 let pargs = many @@ parens_or_not @@ ppattern
@@ -356,7 +386,7 @@ let eletfun pexpr =
       let body = construct_efun args body in
       if flag then eletrec name body else elet name body)
     parse_rec_or_not
-    pIdent
+    psIdent
     pargs
     (pstoken "=" *> pexpr)
 ;;
@@ -368,7 +398,7 @@ let eletdecl pexpr =
       let body1 = construct_efun args body1 in
       if flag then eletrecin name body1 body2 else eletin name body1 body2)
     parse_rec_or_not
-    pIdent
+    psIdent
     pargs
     (pstoken1 "=" *> pexpr)
     (pstoken1 "in" *> pexpr)
@@ -400,7 +430,7 @@ let ptype p =
   *> lift3
        (fun pars id pv_types -> etype id pars pv_types)
        pparameters
-       (pIdent <* pstoken "=")
+       (psIdent <* pstoken "=")
        (ptyps p)
 ;;
 
