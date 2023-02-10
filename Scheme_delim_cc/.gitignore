@@ -1,0 +1,13 @@
+_build
+.merlin
+/_esy
+/node_modules
+/esy.lock
+/.melange.eobjs
+
+.envrc
+.direnv/
+.vscode
+result
+tasks.md
+test_*

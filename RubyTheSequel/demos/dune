@@ -1,0 +1,8 @@
+(executable
+ (name demoInterpret)
+ (modules demoInterpret)
+ (public_name demoInterpret)
+ (libraries ruby_lib stdio))
+
+(cram
+ (deps ./demoInterpret.exe))

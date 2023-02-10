@@ -1,0 +1,18 @@
+(test
+ (name test)
+ (package Scheme_delim_cc)
+ (libraries Scheme_delim_cc.Lib base))
+
+(cram
+ (package Scheme_delim_cc)
+ (deps
+  %{bin:scheme}
+  ./factorial.scm
+  ./plus_x.scm
+  ./fibonacci.scm
+  ./map.scm
+  ./fold.scm
+  ./filter.scm
+  ./iseven.scm
+  ./y.scm
+  ./curry.scm))

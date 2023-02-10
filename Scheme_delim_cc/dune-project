@@ -1,0 +1,34 @@
+(lang dune 3.4)
+
+(generate_opam_files true)
+
+(cram enable)
+
+(license LGPL-4.0-or-later)
+
+(authors "ArtemKhel")
+
+(maintainers "https://github.com/ArtemKhel")
+
+(bug_reports "https://github.com/ArtemKhel/fp2022/issues")
+
+(homepage "https://github.com/ArtemKhel/fp2022")
+
+(package
+ (name Scheme_delim_cc)
+ (synopsis "An interpreter for Scheme with delim/cc support")
+ (description "An interpreter for Scheme with delim/cc support")
+ (version 0.1)
+ (depends
+  base
+  dune
+  angstrom
+  ppx_deriving
+  ppx_expect
+  ppx_compare
+  qcheck-core
+  (ocamlformat :build)
+  (odoc :with-doc)
+  (ppx_inline_test :with-test)
+  ; After adding dependencies to 'dune' files and the same dependecies here too
+  ))

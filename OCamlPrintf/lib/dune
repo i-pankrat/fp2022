@@ -1,0 +1,8 @@
+(library
+ (name ocamlprintf_lib)
+ (public_name OCamlPrintf.Lib)
+ (modules Ast Parser Pp Inferencer Typing Interpret)
+ (libraries base angstrom stdio)
+ (preprocess
+  (pps ppx_expect ppx_deriving.show ppx_variants_conv))
+ (inline_tests))

@@ -1,0 +1,32 @@
+(lang dune 2.8)
+
+(generate_opam_files true)
+
+(cram enable)
+
+(license LGPL-3.0-or-later)
+
+(authors "Lev Golofastov")
+
+(maintainers "Lev Golofastov")
+
+(bug_reports "https://github.com/Kakadu/fp2022")
+
+(homepage "https://github.com/Kakadu/fp2022")
+
+(package
+ (name OCamlPrintf)
+ (synopsis "An interpreter for OCaml")
+ (description "mini-language interpreter for OCaml with printf")
+ (version 0.1)
+ (depends
+  dune
+  angstrom
+  (ppx_inline_test :with-test)
+  qcheck-core
+  ppx_expect
+  ppx_deriving
+  ppx_variants_conv
+  (odoc :with-doc)
+  (ocamlformat :build)
+  base))

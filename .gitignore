@@ -1,7 +1,14 @@
-.merlin
 .vscode
 _build
 /_reports
 .bloop
+.DS_Store
 .metals
+
 /install_linter.sh
+
+# Compiled object files
+*.cm[ioxa]
+*.cmxa
+*.o
+

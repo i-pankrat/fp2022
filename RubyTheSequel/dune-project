@@ -1,0 +1,32 @@
+(lang dune 2.8)
+
+(generate_opam_files true)
+
+(cram enable)
+
+(license LGPL-3.0-or-later)
+
+(authors "Vladislav Shalnev")
+
+(maintainers "Vladislav Shalnev")
+
+(bug_reports "https://github.com/vladyoslav/fp2022")
+
+(homepage "https://github.com/vladyoslav/fp2022")
+
+(package
+ (name RubyTheSequel)
+ (synopsis "An interpreter for Ruby language")
+ (description "An implementaion of Ruby mini-language")
+ (version 0.1)
+ (depends
+  dune
+  angstrom
+  (ppx_inline_test :with-test)
+  qcheck-core
+  ppx_expect
+  ppx_deriving
+  ppx_variants_conv
+  (odoc :with-doc)
+  (ocamlformat :build)
+  base))

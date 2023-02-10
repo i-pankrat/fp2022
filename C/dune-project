@@ -1,0 +1,35 @@
+(lang dune 2.8)
+
+(generate_opam_files true)
+
+(cram enable)
+
+(license LGPL-3.0-or-later)
+
+(authors "Mikhail Vyrodov")
+
+(maintainers "Mihail Vyrodov")
+
+(bug_reports "FIXME where to put bug reports about the code")
+
+(homepage "FIXME Homepage")
+
+(package
+ (name C) ; FIXME and regenerate .opam file using 'dune build @install'
+ (synopsis "A parser for C language")
+ (description
+  "FIXME. A longer description, for example, which are the most interesing features being supported, etc.")
+ (version 0.1)
+ (depends
+  dune
+  angstrom
+  stdint
+  ppx_deriving
+  (ppx_inline_test :with-test)
+  qcheck-core
+  ppx_expect
+  (odoc :with-doc)
+  (ocamlformat :build)
+  base
+  ; After adding dependencies to 'dune' files and the same dependecies here too
+  ))
