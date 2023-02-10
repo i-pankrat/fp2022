@@ -329,7 +329,8 @@ let pargs = many @@ parens_or_not @@ ppattern
 let pargs1 = many @@ parens_or_not @@ ppattern
 
 type edispatch =
-  { evalue : edispatch -> expr t
+  { evar : edispatch -> expr t
+  ; econst : edispatch -> expr t
   ; econdition : edispatch -> expr t
   ; elet : edispatch -> expr t
   ; eletin : edispatch -> expr t
@@ -439,36 +440,56 @@ let chainl1 e op =
   e >>= fun init -> go init
 ;;
 
-let rec chainr1 e op = e >>= fun a -> op >>= (fun f -> chainr1 e op >>| f a) <|> return a
+(** Binary operations constructors *)
 
-let from_str_to_binop = function
-  | "+" -> Plus
-  | "-" -> Minus
-  | "*" -> Mult
-  | "/" -> Divide
-  | "&&" -> And
-  | "||" -> Or
-  | "=" -> Eq
-  | "!=" -> Neq
-  | ">" -> Gt
-  | "<" -> Lt
-  | ">=" -> Gtq
-  | "<=" -> Ltq
-  | "::" -> ConsConcat
-  | _ -> failwith "Such operator does not exist"
+let contruct_ebinop op e1 e2 = eapply (eapply op e1) e2
+let edivide = contruct_ebinop @@ EBinOp Divide
+let emult = contruct_ebinop @@ EBinOp Mult
+let eplus = contruct_ebinop @@ EBinOp Plus
+let eminus = contruct_ebinop @@ EBinOp Minus
+let egt = contruct_ebinop @@ EBinOp Gt
+let egtq = contruct_ebinop @@ EBinOp Gtq
+let elt = contruct_ebinop @@ EBinOp Lt
+let eltq = contruct_ebinop @@ EBinOp Ltq
+let econs_concat = contruct_ebinop @@ EBinOp ConsConcat
+let emod = contruct_ebinop @@ EBinOp Mod
+let eand = contruct_ebinop @@ EBinOp And
+let eor = contruct_ebinop @@ EBinOp Or
+let eeq = contruct_ebinop @@ EBinOp Eq
+let eneq = contruct_ebinop @@ EBinOp Neq
+
+let pbinop expr =
+  let prior1 =
+    empty
+    *> choice
+         [ string "*" *> return emult
+         ; string "/" *> return edivide
+         ; string "%" *> return emod
+         ; string "::" *> return econs_concat
+         ]
+  in
+  let prior2 =
+    empty *> choice [ string "+" *> return eplus; string "-" *> return eminus ]
+  in
+  let prior3 =
+    empty
+    *> choice
+         [ string ">" *> return egt
+         ; string ">=" *> return egtq
+         ; string "<" *> return elt
+         ; string "<=" *> return eltq
+         ]
+  in
+  let prior4 = empty *> choice [ string "=" *> return eeq; string "<>" *> return eneq ] in
+  let prior5 = empty *> string "&&" *> return eand in
+  let prior6 = empty *> string "||" *> return eor in
+  let expr = chainl1 expr prior1 in
+  let expr = chainl1 expr prior2 in
+  let expr = chainl1 expr prior3 in
+  let expr = chainl1 expr prior4 in
+  let expr = chainl1 expr prior5 in
+  chainl1 expr prior6
 ;;
-
-let pbinop chain1 term binops =
-  chain1
-    term
-    ((fun op expr1 expr2 -> eapply (eapply (ebinop @@ from_str_to_binop op) expr1) expr2)
-    <$> choice ~failure_msg:"Can not parse binary operation" (List.map binops ~f:pstoken)
-    )
-;;
-
-let pelbinop = pbinop chainl1
-let perbinop = pbinop chainr1
-let pevalue = pevar <|> peconst
 
 let peapply pexpr =
   lift2
@@ -477,19 +498,9 @@ let peapply pexpr =
     (many (token1 @@ pexpr))
 ;;
 
-let pbinop pexpr =
-  let term = pexpr in
-  let term = pelbinop term [ "*"; "/" ] in
-  let term = pelbinop term [ "+"; "-" ] in
-  let term = perbinop term [ "::" ] in
-  let term = pelbinop term [ "!="; "="; "<="; "<"; ">="; ">" ] in
-  let term = perbinop term [ "&&" ] in
-  let term = perbinop term [ "||" ] in
-  term
-;;
-
 let pack =
-  let evalue _ = pevalue in
+  let econst _ = peconst in
+  let evar _ = pevar in
   let lets pack =
     choice ~failure_msg:"Failed to parse lets" [ pack.elet pack; pack.eletrec pack ]
     <* empty
@@ -507,10 +518,10 @@ let pack =
       ; pack.econdition pack
       ; pack.ebinop pack
       ; pack.eapply pack
-      ; pack.efun pack
-      ; pack.ematch pack
       ; pack.elist pack
       ; pack.etuple pack
+      ; pack.efun pack
+      ; pack.ematch pack
       ; pack.epv pack
       ]
   in
@@ -547,7 +558,8 @@ let pack =
     let ebinop_parse =
       choice
         ~failure_msg:"Failed to parse binary operation"
-        [ pevalue
+        [ pack.evar pack
+        ; pack.econst pack
         ; pparens @@ pack.econdition pack
         ; pparens @@ pack.ematch pack
         ; pparens @@ pack.eapply pack
@@ -564,7 +576,8 @@ let pack =
       parens_or_not
       @@ choice
            ~failure_msg:"Failed to parse application"
-           [ pack.evalue pack
+           [ pack.evar pack
+           ; pack.econst pack
            ; pack.elist pack
            ; pack.etuple pack
            ; pparens @@ pack.efun pack
@@ -585,6 +598,8 @@ let pack =
       ; pack.ematch pack
       ; pack.eapply pack
       ; letsin pack
+      ; pack.etuple pack
+      ; pack.elist pack
       ]
   in
   let elet pack = fix @@ fun _ -> eletfun @@ lets_parsers pack in
@@ -594,7 +609,12 @@ let pack =
   let value_parsers pack =
     choice
       ~failure_msg:"Failed to parse list"
-      [ pack.evalue pack; pack.etuple pack; pack.elist pack; pack.epv pack ]
+      [ pack.evar pack
+      ; pack.econst pack
+      ; pack.etuple pack
+      ; pack.elist pack
+      ; pack.epv pack
+      ]
   in
   let elist pack =
     fix
@@ -609,7 +629,8 @@ let pack =
   let etuple pack = fix @@ fun _ -> parse_tuple_parens (value_parsers pack) etuple in
   let epv pack = fix @@ fun _ -> pepv @@ value_parsers pack in
   let etype _ = fix @@ fun _ -> ptype ppvtype in
-  { evalue
+  { evar
+  ; econst
   ; econdition
   ; elet
   ; eletin
