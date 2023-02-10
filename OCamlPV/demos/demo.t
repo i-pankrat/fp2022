@@ -16,7 +16,7 @@ Factorial
   - : int = 120
 Fibonacci
   $ ./demo.exe <<- EOF
-  > let rec fib n = if n <= 1 then 1 else (fib (n - 1)) + (fib (n - 2));;
+  > let rec fib n = if n < 2 then 1 else (fib (n - 1)) + (fib (n - 2));;
   > let result = (fib 5)
   > EOF
   - : int = 8
@@ -90,9 +90,9 @@ List.filter
   >       | [] -> []
   >       | hd :: tl -> if (f hd) then hd :: (helper tl) else (helper tl)
   >   in (helper list);;
-  > let result = (list_filter [1; 2; 3; 4; 5; 6; 7] (fun x -> x >= 5))
+  > let result = (list_filter [1; 2; 3; 4; 5; 6; 7] (fun x -> x > 5))
   > EOF
-  - : int list = [5; 6; 7]
+  - : int list = [6; 7]
 List.nth_opt
   $ ./demo.exe <<- EOF
   > let nth_opt list number =
@@ -101,9 +101,10 @@ List.nth_opt
   >     | [] -> \`None
   >     | hd :: tl -> if (n + 1) = number then \`Some hd else (helper tl (n + 1))
   >   in
-  >   (helper list 0)
+  >   (helper list 0);;
+  > let res = (nth_opt [1;2;3;4;5] 3)
   > EOF
-  - : ('a list -> (int -> [> `None | `Some of 'a ])) = <fun>
+  - : [> `None | `Some of int ] = `Some (3)
 List.find_opt
   $ ./demo.exe <<- EOF
   > let find_opt f list =
@@ -112,9 +113,38 @@ List.find_opt
   >     | [] -> \`None
   >     | hd :: tl -> if (f hd) then \`Some hd else (helper tl)
   >   in
-  >   (helper list)
+  >   (helper list);;
+  > let res = (find_opt (fun x -> x * x = 2 * x) [1;2;3;4;5])
   > EOF
-  - : (('a -> bool) -> ('a list -> [> `None | `Some of 'a ])) = <fun>
+  - : [> `None | `Some of int ] = `Some (2)
+List.assoc_opt
+  $ ./demo.exe <<- EOF
+  > let assoc_opt as list =
+  >   let rec helper l =
+  >     match l with
+  >     | [] -> \`None
+  >     | hd :: tl -> (match hd with | (f, s) -> 
+  >         if as = f then \`Some s else (helper tl))
+  >   in
+  >   (helper list);;
+  > let res = (assoc_opt "i-pankrat" [("expression", 1); ("interpret", 2); ("ocaml", 3); ("spbu", 4); ("kakadu", 5); ("i-pankrat", 6)])
+  > EOF
+  - : [> `None | `Some of int ] = `Some (6)
+List.rev_split
+  $ ./demo.exe <<- EOF
+  > let rev_split list =
+  >   let rec helper l (f1, s1) = 
+  >     match l with
+  >     | [] -> (f1, s1)
+  >     | hd :: tl -> 
+  >       (match hd with 
+  >         | (a, b) -> 
+  >         let f1 = a :: f1 in 
+  >         let f2 = b :: s1 in (helper tl (f1, f2)))
+  >   in (helper list ([], []));;
+  > let res = (rev_split [("expression", 1); ("interpret", 2); ("ocaml", 3); ("spbu", 4); ("kakadu", 5); ("i-pankrat", 6)])
+  > EOF
+  - : (string list * int list) = (["i-pankrat"; "kakadu"; "spbu"; "ocaml"; "interpret"; "expression"], [6; 5; 4; 3; 2; 1])
 fst
   $ ./demo.exe <<- EOF
   > let fst (f, s) = f;;

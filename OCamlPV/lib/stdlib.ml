@@ -73,7 +73,9 @@ let std_lib =
   let list_split list =
     let rec helper l (f1, s1) = 
       match l with
-        | [] -> (f1, s1)
+        | [] -> let f1 = (list_rev f1) in 
+                let s1 = (list_rev s1) in 
+                (f1, s1)
         | hd :: tl -> 
           (match hd with 
           | (a, b) -> 
