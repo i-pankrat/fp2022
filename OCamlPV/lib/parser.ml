@@ -1384,3 +1384,30 @@ let%expect_test _ =
          ))
       ] |}]
 ;;
+
+(** Transform res *)
+
+let%expect_test _ =
+  interprete_parse_result
+    show_statements
+    pstatements
+    "let transform_res res =\n\
+    \      match res with\n\
+    \      | `None -> `Error \"Failed to get the result\"\n\
+    \      | `Some x -> `Ok x";
+  [%expect
+    {|
+    [(ELet ("transform_res",
+        (EFun ((PVar "res"),
+           (EMatch ((EVar "res"),
+              [((PPolyVariant ("`None", [])),
+                (EPolyVariant ("`Error",
+                   [(EConst (CString "Failed to get the result"))])));
+                ((PPolyVariant ("`Some", [(PVar "x")])),
+                 (EPolyVariant ("`Ok", [(EVar "x")])))
+                ]
+              ))
+           ))
+        ))
+      ] |}]
+;;
