@@ -407,15 +407,6 @@ let eletdecl pexpr =
 
 let ptyp p =
   lift2
-    (fun constr t ->
-      Format.printf "res: %s\n" constr;
-      constr, t)
-    ppvconstructor
-    (pstoken "of" *> p)
-;;
-
-let ptyp p =
-  lift2
     (fun constr typ -> constr, typ)
     ppvconstructor
     (option cnotype (pstoken "of" *> p))
@@ -1129,11 +1120,11 @@ let%expect_test _ =
   interprete_parse_result
     show_expr
     pexpr
-    "type 'a 'b good_or_bad = [ `Yes of 'hello * message list | `No of 'a * 'b]";
+    "type 'a 'b good_or_bad = [ `Yes of hello * message list | `No of 'a * 'b]";
   [%expect
     {|
     (EType ("good_or_bad", ["'a"; "'b"],
-       [("`Yes", (TTuple [(TAny "'hello"); (TList (TType "message"))]));
+       [("`Yes", (TTuple [(TType "hello"); (TList (TType "message"))]));
          ("`No", (TTuple [(TAny "'a"); (TAny "'b")]))]
        )) |}]
 ;;
