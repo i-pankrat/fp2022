@@ -60,11 +60,18 @@ type value =
 
 type environment = (id, value, String.comparator_witness) Map.t
 
+(** value type constructors *)
+
 let cvint i = VInt i
 let cvbool b = VBool b
 let cvstring s = VString s
+let cvtuple values = VTuple values
+let cvlist values = VList values
 let cvfun p e subst = VFun (p, e, subst)
 let cvbinop op = VBinOp op
+let cvpolyvariant id values = VPolyVariant (id, values)
+let cvunit = VUnit
+let cvnil = VNil
 
 module Env (M : FailMonad) = struct
   open M
@@ -136,7 +143,7 @@ end = struct
        | Mod, VInt i1, VInt i2 -> return @@ cvint (i1 % i2)
        | And, VBool b1, VBool b2 -> return @@ cvbool (b1 && b2)
        | Or, VBool b1, VBool b2 -> return @@ cvbool (b1 || b2)
-       | ConsConcat, _, VList list -> return @@ VList (farg :: list)
+       | ConsConcat, _, VList list -> return @@ cvlist (farg :: list)
        | ConsConcat, _, VNil -> return @@ VList (farg :: [])
        | op, VInt i1, VInt i2 ->
          let* comp = eval_comparison op in
@@ -205,8 +212,8 @@ end = struct
        | CInt i -> return @@ cvint i
        | CBool b -> return @@ cvbool b
        | CString s -> return @@ cvstring s
-       | CNil -> return VNil
-       | CUnit -> return VUnit)
+       | CNil -> return cvnil
+       | CUnit -> return cvunit)
     | EFun (pat, expr) -> return @@ cvfun pat expr substs
     | EVar var -> find env var
     | EApply (func, arg) ->
@@ -265,14 +272,14 @@ end = struct
           return (evaled :: acc)
       in
       let* res = helper (return [ evaled ]) t in
-      let res = VList (List.rev res) in
+      let res = cvlist (List.rev res) in
       return res
     | ETuple els ->
       let* vls = eval_list els in
-      return (VTuple vls)
+      return (cvtuple vls)
     | EPolyVariant (id, exprs) ->
       let* vls = eval_list exprs in
-      return (VPolyVariant (id, vls))
+      return (cvpolyvariant id vls)
     | EType _ -> fail (`NotImplemented "type")
   ;;
 
@@ -661,39 +668,6 @@ let%test _ =
   | _ -> false
 ;;
 
-let test n =
-  [ ELet
-      ( "find_opt"
-      , EFun
-          ( PVar "f"
-          , EFun
-              ( PVar "list"
-              , ELetRecIn
-                  ( "helper"
-                  , EFun
-                      ( PVar "l"
-                      , EMatch
-                          ( EVar "l"
-                          , [ PConst CNil, EPolyVariant ("`None", [])
-                            ; ( PCons (PVar "hd", PVar "tl")
-                              , EIfThenElse
-                                  ( EApply (EVar "f", EVar "hd")
-                                  , EPolyVariant ("`Some", [ EVar "hd" ])
-                                  , EApply (EVar "helper", EVar "tl") ) )
-                            ] ) )
-                  , EApply (EVar "helper", EVar "list") ) ) ) )
-  ; ELet
-      ( "res"
-      , EApply
-          ( EApply
-              ( EVar "find_opt"
-              , EFun (PVar "x", EApply (EApply (EBinOp Eq, EConst (CInt n)), EVar "x")) )
-          , EList
-              ( EConst (CInt 1)
-              , EList (EConst (CInt 2), EList (EConst (CInt 3), EConst CNil)) ) ) )
-  ]
-;;
-
 let test name constr =
   [ ELet
       ( "transform_res"
@@ -711,7 +685,6 @@ let test name constr =
 ;;
 
 let%test _ =
-  let open Format in
   match run_test @@ test "`None" [] with
   | Base.Result.Ok (VPolyVariant ("`Error", [ VString "Failed to get the result" ])) ->
     true
@@ -719,7 +692,6 @@ let%test _ =
 ;;
 
 let%test _ =
-  let open Format in
   let constr = [ EConst (CString "Success") ] in
   match run_test @@ test "`Some" constr with
   | Base.Result.Ok (VPolyVariant ("`Ok", [ VString "Success" ])) -> true

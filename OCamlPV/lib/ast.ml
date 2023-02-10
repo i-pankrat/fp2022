@@ -5,71 +5,80 @@
 type id = string [@@deriving eq, show { with_path = false }]
 
 type const =
-  | CInt of int
-  | CBool of bool
-  | CNil
-  | CString of string
-  | CUnit
+  | CInt of int (** Represents integer numbers: ..., -1, 0, 1, ... *)
+  | CBool of bool (** Represents boolean values: false and true *)
+  | CNil (** Represents empty list: [] *)
+  | CString of string (** Represents string values: "Hellow, world!" *)
+  | CUnit (** Repsenets () *)
 [@@deriving eq, show { with_path = false }]
 
 and bin_op =
-  | Plus
-  | Minus
-  | Mult
-  | Divide
-  | Mod
-  | And
-  | Or
-  | Eq
-  | Neq
-  | Gt
-  | Lt
-  | Gtq
-  | Ltq
-  | ConsConcat
+  | Plus (** Addition: + *)
+  | Minus (** Subtraction:  - *)
+  | Mult (** Multiplication: * *)
+  | Divide (** Division: / *)
+  | Mod (** Module: % *)
+  | And (** Boolean operator: && *)
+  | Or (** Boolean operator: || *)
+  | Eq (** Comparison operator: = *)
+  | Neq (** Comparison operator: <> *)
+  | Gt (** Comparison operator: > *)
+  | Lt (** Comparison operator: < *)
+  | Gtq (** Comparison operator: >= *)
+  | Ltq (** Comparison operator: <= *)
+  | ConsConcat (** Add element to the head of the list: 1 :: [2; 3] = [1; 2; 3]*)
 [@@deriving show { with_path = false }]
 
 and pattern =
-  | PConst of const
-  | PVar of id
-  | PTuple of pattern list
-  | PCons of pattern * pattern (* head and tail *)
-  | PWild
+  | PConst of const (** Represents constant patterns *)
+  | PVar of id (** Represents varuable patterns *)
+  | PTuple of pattern list (** Repsenets tuple pattern: (a, b) *)
+  | PCons of pattern * pattern (** Represents the head :: tail pattern *)
+  | PWild (** Representa pattern that shows that each case is an appropriate: _ *)
   | PPolyVariant of id * pattern list
       (** Polymorphic variants. Number of the elements in the list
           represents the number of arguments which contructor takes*)
 [@@deriving eq, show { with_path = false }]
 
+(** Show the type of constructors *)
 and pvtype =
-  | TTuple of pvtype list
-  | TList of pvtype
-  | TType of id
-  | TAny of id
-  | TInt
-  | TString
-  | TBool
-  | TNoType
+  | TTuple of pvtype list (** Represents tuple type: int * int *)
+  | TList of pvtype (** Represents list type: int list *)
+  | TType of id (** Represents declared type: my_type *)
+  | TAny of id (** Represents parameter at type declaration *)
+  | TInt (** Represents int type *)
+  | TString (** Represents string type *)
+  | TBool (** Represents boolean type *)
+  | TNoType (** Represents that declared constructor has no arguments *)
 [@@deriving show { with_path = false }]
 
+(** Represents parameters at type declaration: type 'a 'b my_typ = ...*)
 and parameters = id list
 
 and expr =
-  | EConst of const
+  | EConst of const (** Represents constasnts *)
   | EIfThenElse of expr * expr * expr
-  | ELet of id * expr
-  | ELetIn of id * expr * expr
-  | ELetRec of id * expr
+      (** Represents condition statement: if expr then expr else expr *)
+  | ELet of id * expr (** Represents let declaration: let id = expr *)
+  | ELetIn of id * expr * expr (** Represents let in declaraion: let id = expr in expr *)
+  | ELetRec of id * expr (** Represents let rec declaration: let rec id = expr *)
   | ELetRecIn of id * expr * expr
+      (** Represents let rec in declaration: let rec id = expr in expr *)
   | EMatch of expr * (pattern * expr) list
-  | EBinOp of bin_op
-  | EVar of id
-  | EFun of pattern * expr
+      (** Represents pattern matching: match expr with (pattern * expr) list *)
+  | EBinOp of bin_op (** Represents binaty operations: +, -, *, /, ... *)
+  | EVar of id (** Represents variables *)
+  | EFun of pattern * expr (** Represents anonymous function: fun pattern -> expr*)
   | EApply of expr * expr
-  | EList of expr * expr
-  | ETuple of expr list
-  | EPolyVariant of id * expr list (** Polymorphic variants *)
+      (** Represents function and binary operation application to the arguments*)
+  | EList of expr * expr (** Represents list: expr :: expr *)
+  | ETuple of expr list (* Represents tuple: [expr; expr; expr] = (expr, expr, expr) *)
+  | EPolyVariant of id * expr list
+      (** Polymorphic variants, where id represents constructor and expr -- arguments *)
   | EType of id * parameters * (id * pvtype) list
-      (** type id = ... It is possible to declare only polymorphic variants. *)
+      (** Represent typ declaration: type parameters id = (id * pvtype) list.
+          It is possible to declare only polymorphic variants. *)
 [@@deriving show { with_path = false }]
 
+(** Represents the sequence of expr *)
 and statements = expr list [@@deriving show { with_path = false }]

@@ -2,6 +2,7 @@
 
 (** SPDX-License-Identifier: LGPL-3.0-or-later *)
 
+(** Represents errors that may occur when checking types *)
 type error =
   [ `Occurs_check
   | `No_variable of string
@@ -17,6 +18,7 @@ type environment
 
 val empty : environment
 
+(** Check types of input expressions *)
 val check_types
   :  ?env:environment
   -> Ast.expr list

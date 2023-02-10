@@ -46,6 +46,8 @@ let is_prohibited = function
   | _ -> false
 ;;
 
+(** Simple parsers which help to implement more complicated ones *)
+
 let empty = take_while is_empty
 let empty1 = take_while1 is_empty
 let token s = empty *> s
@@ -641,9 +643,9 @@ let pack =
 
 let pexpr = pack.expr pack
 let pstatements = sep_by1 (pstoken ";;") pexpr
+let parse program = parse_str pstatements program
 
 (** Parser tests *)
-let parse program = parse_str pstatements program
 
 let interprete_parse_result f p str =
   match parse_str p str with

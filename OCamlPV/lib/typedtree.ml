@@ -16,20 +16,27 @@ end
 
 type id = string [@@deriving eq, show { with_path = false }]
 
+(** Represent polymorphic variant where id -- constructor and ty list -- types of arguments.
+    Empty list means that there are no arguments *)
 type pv = id * ty list [@@deriving eq, show { with_path = false }]
 
+(** Represent the type of expression *)
 and ty =
-  | Prim of string
-  | Ty_var of binder
-  | Arrow of ty * ty
-  | List of ty
-  | Tuple of ty list
+  | Prim of string (** Represents available ground types *)
+  | Ty_var of binder (** Represents 'a, 'b types *)
+  | Arrow of ty * ty (** Represents function type: 'a -> 'a *)
+  | List of ty (** Represents list type: int list *)
+  | Tuple of ty list (** Represents typle type: [int, string] means (int, string) *)
   | MoreTags of binder * pv list
+      (** Represents any type that contains at least all polyvariants from pv list  *)
   | LessTags of binder * pv list
-    (* I have come up to the conclusion that the simplest way to deal
-    with polymorphic variant is to add binder to identify them.
-    It's seems to me like a bad way but another are much worse... *)
+      (** Represents any type that contains all or less elemets from pv list *)
+(* I have come up to the conclusion that the simplest way to deal
+  with polymorphic variant is to add binder to identify and substity them in the inferencer.
+  It's seems to me like a bad way but anothers are much worse... *)
 [@@deriving show { with_path = false }]
+
+(** Type constructors *)
 
 let arrow l r = Arrow (l, r)
 let int_typ = Prim "int"

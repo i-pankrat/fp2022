@@ -5,14 +5,6 @@
 open Base
 open Typedtree
 
-let use_logging = false
-
-let log fmt =
-  if use_logging
-  then Format.kasprintf (fun s -> Format.printf "%s\n%!" s) fmt
-  else Format.ifprintf Format.std_formatter fmt
-;;
-
 type error =
   [ `Occurs_check
   | `No_variable of string
@@ -212,6 +204,7 @@ end = struct
       | Ok res -> res
       | Unequal_lengths -> fail (`Unification_failed (l, r))
     in
+    (* Give substs that expand tag with new polyvariant *)
     let process_tags bind1 tag1 bind2 tag2 constructor =
       if bind1 != bind2
       then

@@ -7,7 +7,7 @@ open Format
 
 let print_prompt () = printf "\n# %!"
 
-let print_intduciton () =
+let print_hello () =
   printf
     "\n\
      Hello! It's an OCaml interpreter. Stdlib is already loaded!\n\
@@ -25,7 +25,8 @@ let print_intduciton () =
      \t%s\n\
      \t%s\n\
      \t%s\n\
-     \t%s\n"
+     \t%s\n\
+     \tPrint \"exit\" to leave interpret"
     "max: ('a -> ('a -> 'a))"
     "min: ('a -> ('a -> 'a))"
     "list_rev: ('a list -> 'a list)"
@@ -95,7 +96,7 @@ let rec repl tenv ienv =
 ;;
 
 let () =
-  print_intduciton ();
+  print_hello ();
   let tenc, ienv = load_stdlib Inferencer.empty Interpret.empty Stdlib.std_lib in
   repl tenc ienv
 ;;

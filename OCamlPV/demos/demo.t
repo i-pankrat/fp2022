@@ -145,6 +145,14 @@ List.rev_split
   > let res = (rev_split [("expression", 1); ("interpret", 2); ("ocaml", 3); ("spbu", 4); ("kakadu", 5); ("i-pankrat", 6)])
   > EOF
   - : (string list * int list) = (["i-pankrat"; "kakadu"; "spbu"; "ocaml"; "interpret"; "expression"], [6; 5; 4; 3; 2; 1])
+transform_res
+  $ ./demo.exe <<- EOF
+  > let transform_res res = 
+  >   match res with
+  >     | \`None -> \`Error "Failed to get the result"
+  >     | \`Some x -> \`Ok x
+  > EOF
+  - : ([< `Some of 'a | `None ] -> [> `Error of string | `Ok of 'a ]) = <fun>
 fst
   $ ./demo.exe <<- EOF
   > let fst (f, s) = f;;

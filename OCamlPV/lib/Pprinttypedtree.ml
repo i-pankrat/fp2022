@@ -9,6 +9,7 @@ type 'a result =
   | Add of 'a
   | Same of 'a
 
+(** Convert number to letter *)
 let rec transform_binder binder =
   if 0 <= binder && binder < 26
   then (
@@ -54,6 +55,7 @@ let pp_pv helper ppf l =
   | _ -> fprintf ppf "%s of %a" c (fun ppf -> pp_list helper ppf " * ") l
 ;;
 
+(** Conver binder to letters and print type using letters *)
 let pp_typ_letter ppf ty =
   let rec get_subs subs index =
     let list_helper isubs iindex l =
@@ -106,6 +108,7 @@ let pp_typ_letter ppf ty =
   helper ppf ty
 ;;
 
+(** Print type using binders not letters *)
 let rec pp_typ_binder ppf =
   let open Format in
   function
