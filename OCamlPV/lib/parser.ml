@@ -37,7 +37,18 @@ let is_ident_symbol = function
 ;;
 
 let is_kw = function
-  | "let" | "match" | "if" | "else" | "than" | "fun" | "with" | "in" -> true
+  | "let"
+  | "match"
+  | "if"
+  | "else"
+  | "then"
+  | "fun"
+  | "with"
+  | "in"
+  | "function"
+  | "type"
+  | "false"
+  | "true" -> true
   | _ -> false
 ;;
 

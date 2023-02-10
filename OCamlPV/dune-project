@@ -10,15 +10,12 @@
 
 (maintainers "Ilya Pankratov")
 
-(bug_reports "FIXME where to put bug reports about the code")
-
-(homepage "FIXME Homepage")
+(bug_reports "https://github.com/i-pankrat/fp2022/")
 
 (package
- (name OCamlPV) ; FIXME and regenerate .opam file using 'dune build @install'
- (synopsis "FIXME An interpreter for language")
- (description
-  "FIXME. A longer description, for example, which are the most interesing features being supported, etc.")
+ (name OCamlPV)
+ (synopsis "OCaml with polymorphic variants")
+ (description "OCaml with polymorphic variants")
  (version 0.1)
  (depends
   dune
@@ -29,6 +26,4 @@
   ppx_deriving
   (odoc :with-doc)
   (ocamlformat :build)
-  base
-  ; After adding dependencies to 'dune' files and the same dependecies here too
-  ))
+  base))
