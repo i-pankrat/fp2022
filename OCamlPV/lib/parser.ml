@@ -52,7 +52,9 @@ let is_kw = function
   | "and"
   | "when"
   | "as"
-  | "do" -> true
+  | "do"
+  | "mod"
+  | "of" -> true
   | _ -> false
 ;;
 
