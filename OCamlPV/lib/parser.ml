@@ -660,6 +660,16 @@ let%expect_test _ =
 ;;
 
 let%expect_test _ =
+  interprete_parse_result show_const pconst "-42";
+  [%expect {| (CInt -42) |}]
+;;
+
+let%expect_test _ =
+  interprete_parse_result show_const pconst "  -777";
+  [%expect {| (CInt -777) |}]
+;;
+
+let%expect_test _ =
   interprete_parse_result show_const pconst "false";
   [%expect {| (CBool false) |}]
 ;;
@@ -694,6 +704,11 @@ let%expect_test _ =
 let%expect_test _ =
   interprete_parse_result show_pattern ppattern "4";
   [%expect {| (PConst (CInt 4)) |}]
+;;
+
+let%expect_test _ =
+  interprete_parse_result show_pattern ppattern " -7";
+  [%expect {| (PConst (CInt -7)) |}]
 ;;
 
 let%expect_test _ =
@@ -968,9 +983,9 @@ let%expect_test _ =
 (** Test application *)
 
 let%expect_test _ =
-  interprete_parse_result show_expr (pack.eapply pack) "f x y";
+  interprete_parse_result show_expr pexpr "f x";
   [%expect {|
-        (EApply ((EApply ((EVar "f"), (EVar "x"))), (EVar "y"))) |}]
+        (EApply ((EVar "f"), (EVar "x"))) |}]
 ;;
 
 (** Test condition statement *)
@@ -1162,6 +1177,22 @@ let%expect_test _ =
 ;;
 
 let%expect_test _ =
+  interprete_parse_result show_expr pexpr "let apply f x = f x";
+  [%expect
+    {|
+    (ELet ("apply",
+       (EFun ((PVar "f"), (EFun ((PVar "x"), (EApply ((EVar "f"), (EVar "x")))))
+          ))
+       )) |}]
+;;
+
+let%expect_test _ =
+  interprete_parse_result show_expr pexpr "let apply = x";
+  [%expect {|
+    (ELet ("apply", (EVar "x"))) |}]
+;;
+
+let%expect_test _ =
   interprete_parse_result
     show_expr
     pexpr
@@ -1184,7 +1215,6 @@ let%expect_test _ =
        )) |}]
 ;;
 
-(* TODO: fix braces at application *)
 let%expect_test _ =
   interprete_parse_result
     show_expr
@@ -1208,7 +1238,6 @@ let%expect_test _ =
        ))|}]
 ;;
 
-(* TODO: fix braces at application *)
 let%expect_test _ =
   interprete_parse_result
     show_expr
@@ -1244,7 +1273,6 @@ let%expect_test _ =
 
 (** Test let in and let rec in *)
 
-(* TODO: fix braces at application *)
 let%expect_test _ =
   interprete_parse_result
     show_expr
@@ -1254,7 +1282,7 @@ let%expect_test _ =
     \   match l with \n\
     \    | [] -> acc \n\
     \    | hd :: tl -> (helper (hd :: acc) tl) in \n\
-    \ (helper [] list) \n";
+    \ helper [] list \n";
   [%expect
     {|
     (ELet ("list_rev",
@@ -1290,7 +1318,7 @@ let%expect_test _ =
     \  match list with \n\
     \    | [] -> [] \n\
     \    | h :: t -> (f h) :: (map f t);;\n\
-     let list = (map (fun x -> x + x) [1; 2; 3])";
+     let list = map (fun x -> x + x) [1; 2; 3]";
   [%expect
     {|
     [(ELetRec ("map",
@@ -1336,8 +1364,8 @@ let%expect_test _ =
     \       | [] -> `None\n\
     \       | hd :: tl -> if (n + 1) = number then `Some hd else (helper tl (n + 1))\n\
     \     in\n\
-    \     (helper list 0);;\n\
-    \   let res = [1; 2; 3; 4; 5]";
+    \     helper list 0;;\n\
+    \   let res = nth_opt [1; 2; 3; 4; 5]";
   [%expect
     {|
     [(ELet ("nth_opt",
@@ -1374,11 +1402,13 @@ let%expect_test _ =
            ))
         ));
       (ELet ("res",
-         (EList ((EConst (CInt 1)),
-            (EList ((EConst (CInt 2)),
-               (EList ((EConst (CInt 3)),
-                  (EList ((EConst (CInt 4)),
-                     (EList ((EConst (CInt 5)), (EConst CNil)))))
+         (EApply ((EVar "nth_opt"),
+            (EList ((EConst (CInt 1)),
+               (EList ((EConst (CInt 2)),
+                  (EList ((EConst (CInt 3)),
+                     (EList ((EConst (CInt 4)),
+                        (EList ((EConst (CInt 5)), (EConst CNil)))))
+                     ))
                   ))
                ))
             ))
