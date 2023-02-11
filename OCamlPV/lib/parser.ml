@@ -48,7 +48,11 @@ let is_kw = function
   | "function"
   | "type"
   | "false"
-  | "true" -> true
+  | "true"
+  | "and"
+  | "when"
+  | "as"
+  | "do" -> true
   | _ -> false
 ;;
 
