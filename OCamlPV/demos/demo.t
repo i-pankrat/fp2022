@@ -3,27 +3,42 @@ Plus
   > let x = 2 + 40
   > EOF
   - : int = 42
+Product
+  $ ./demo.exe <<- EOF
+  > 7 + 77
+  > EOF
+  - : int = 84
+Arithmetic expression
+  $ ./demo.exe <<- EOF
+  > (1 + 2) * (10 - 5) / 5
+  > EOF
+  - : int = 3
 Sum
   $ ./demo.exe <<- EOF
-  > let sum x y = x + y in (sum 2 2)
+  > let sum x y = x + y in sum 2 2
   > EOF
   - : int = 4
+Apply
+  $ ./demo.exe <<- EOF
+  > let apply f x = f x
+  > EOF
+  - : (('a -> 'b) -> ('a -> 'b)) = <fun>
 Factorial
   $ ./demo.exe <<- EOF
-  > let rec fact n = if n = 1 then 1 else n * (fact (n - 1)) in
-  >   (fact 5)
+  > let rec fact n = if n = 1 then 1 else n * (fact (n - 1))
+  > in fact 5
   > EOF
   - : int = 120
 Fibonacci
   $ ./demo.exe <<- EOF
   > let rec fib n = if n < 2 then 1 else (fib (n - 1)) + (fib (n - 2));;
-  > let result = (fib 5)
+  > let result = fib 5
   > EOF
   - : int = 8
 Sum of the first n elements
   $ ./demo.exe <<- EOF
   > let rec sumn n = if n = 1 then 1 else n + (sumn (n - 1));;
-  > let result = (sumn 100)
+  > let result = sumn 100
   - : int = 5050
 List.Rev
   $ ./demo.exe <<- EOF
@@ -31,9 +46,9 @@ List.Rev
   >   let rec helper acc l =
   >     match l with
   >       | [] -> acc
-  >       | hd :: tl -> (helper (hd :: acc) tl)
-  > in (helper [] list);;
-  > let result = (list_rev [1; 2; 3; 4; 5])
+  >       | hd :: tl -> helper (hd :: acc) tl
+  > in helper [] list;;
+  > let result = list_rev [1; 2; 3; 4; 5]
   > EOF
   - : int list = [5; 4; 3; 2; 1]
 List.Map
@@ -42,7 +57,7 @@ List.Map
   >     match list with
   >       | [] -> []
   >       | hd :: tl -> (f hd) :: (list_map f tl);;
-  > let result = (list_map (fun x -> x * x) [1; 2; 3; 4; 5])
+  > let result = list_map (fun x -> x * x) [1; 2; 3; 4; 5]
   > EOF
   - : int list = [1; 4; 9; 16; 25]
 List.Fold
@@ -51,9 +66,9 @@ List.Fold
   >   let rec helper l acc = 
   >     match l with
   >       | [] -> acc
-  >       | hd :: tl -> (helper tl (f acc hd))
-  >   in (helper list acc);;
-  > let result = (list_fold [1; 2; 3; 4; 5] 0 (fun acc el -> acc + el))
+  >       | hd :: tl -> helper tl (f acc hd)
+  >   in helper list acc;;
+  > let result = list_fold [1; 2; 3; 4; 5] 0 (fun acc el -> acc + el)
   > EOF
   - : int = 15
 List.append
@@ -63,8 +78,8 @@ List.append
   >     match l with
   >       | [] -> l2
   >       | hd :: tl -> hd :: (helper tl)
-  >   in (helper l1);;
-  > let result = (list_append [1; 2; 3] [4; 5; 6])
+  >   in helper l1;;
+  > let result = list_append [1; 2; 3] [4; 5; 6]
   > EOF
   - : int list = [1; 2; 3; 4; 5; 6]
 List.concat
@@ -77,9 +92,9 @@ List.concat
   >   let rec helper l = 
   >     match l with
   >       | [] -> []
-  >       | hd :: tl -> (concat2 hd (helper tl))
-  >   in (helper list);;
-  > let result = (list_concat [[1; 2; 3]; [4; 5; 6]])
+  >       | hd :: tl -> concat2 hd (helper tl)
+  >   in helper list;;
+  > let result = list_concat [[1; 2; 3]; [4; 5; 6]]
   > EOF
   - : int list = [1; 2; 3; 4; 5; 6]
 List.filter
@@ -88,9 +103,9 @@ List.filter
   >   let rec helper l = 
   >     match l with
   >       | [] -> []
-  >       | hd :: tl -> if (f hd) then hd :: (helper tl) else (helper tl)
-  >   in (helper list);;
-  > let result = (list_filter [1; 2; 3; 4; 5; 6; 7] (fun x -> x > 5))
+  >       | hd :: tl -> if (f hd) then hd :: (helper tl) else helper tl
+  >   in helper list;;
+  > let result = list_filter [1; 2; 3; 4; 5; 6; 7] (fun x -> x > 5)
   > EOF
   - : int list = [6; 7]
 List.nth_opt
@@ -99,10 +114,10 @@ List.nth_opt
   >   let rec helper l n =
   >     match l with
   >     | [] -> \`None
-  >     | hd :: tl -> if (n + 1) = number then \`Some hd else (helper tl (n + 1))
+  >     | hd :: tl -> if (n + 1) = number then \`Some hd else helper tl (n + 1)
   >   in
-  >   (helper list 0);;
-  > let res = (nth_opt [1;2;3;4;5] 3)
+  >   helper list 0;;
+  > let res = nth_opt [1;2;3;4;5] 3
   > EOF
   - : [> `None | `Some of int ] = `Some (3)
 List.find_opt
@@ -111,10 +126,10 @@ List.find_opt
   >   let rec helper l =
   >     match l with
   >     | [] -> \`None
-  >     | hd :: tl -> if (f hd) then \`Some hd else (helper tl)
+  >     | hd :: tl -> if f hd then \`Some hd else helper tl
   >   in
-  >   (helper list);;
-  > let res = (find_opt (fun x -> x * x = 2 * x) [1;2;3;4;5])
+  >   helper list;;
+  > let res = find_opt (fun x -> x * x = 2 * x) [1;2;3;4;5]
   > EOF
   - : [> `None | `Some of int ] = `Some (2)
 List.assoc_opt
@@ -126,8 +141,8 @@ List.assoc_opt
   >     | hd :: tl -> (match hd with | (f, s) -> 
   >         if as = f then \`Some s else (helper tl))
   >   in
-  >   (helper list);;
-  > let res = (assoc_opt "i-pankrat" [("expression", 1); ("interpret", 2); ("ocaml", 3); ("spbu", 4); ("kakadu", 5); ("i-pankrat", 6)])
+  >   helper list;;
+  > let res = assoc_opt "i-pankrat" [("expression", 1); ("interpret", 2); ("ocaml", 3); ("spbu", 4); ("kakadu", 5); ("i-pankrat", 6)]
   > EOF
   - : [> `None | `Some of int ] = `Some (6)
 List.rev_split
@@ -140,9 +155,9 @@ List.rev_split
   >       (match hd with 
   >         | (a, b) -> 
   >         let f1 = a :: f1 in 
-  >         let f2 = b :: s1 in (helper tl (f1, f2)))
-  >   in (helper list ([], []));;
-  > let res = (rev_split [("expression", 1); ("interpret", 2); ("ocaml", 3); ("spbu", 4); ("kakadu", 5); ("i-pankrat", 6)])
+  >         let f2 = b :: s1 in helper tl (f1, f2))
+  >   in helper list ([], []);;
+  > let res = rev_split [("expression", 1); ("interpret", 2); ("ocaml", 3); ("spbu", 4); ("kakadu", 5); ("i-pankrat", 6)]
   > EOF
   - : (string list * int list) = (["i-pankrat"; "kakadu"; "spbu"; "ocaml"; "interpret"; "expression"], [6; 5; 4; 3; 2; 1])
 transform_res
@@ -156,12 +171,12 @@ transform_res
 fst
   $ ./demo.exe <<- EOF
   > let fst (f, s) = f;;
-  > let result = (fst ("Dmitry", "Kosarev"))
+  > let result = fst ("Dmitry", "Kosarev")
   > EOF
   - : string = "Dmitry"
 snd
   $ ./demo.exe <<- EOF
   > let snd (f, s) = s;;
-  > let result = (snd ("Dmitry", "Kosarev"))
+  > let result = snd ("Dmitry", "Kosarev")
   > EOF
   - : string = "Kosarev"
