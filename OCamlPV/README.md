@@ -20,12 +20,3 @@ Features done:
 Features not implemented:
 
 - Type declarations are not integrated at inferencer and interpret
-
-Bugs and problems:
-
-- Parsing an application only works if it is enclosed in brackets (Big trouble)
-- Other minor parsing troubles
-
-Overview:
-
-Interpret and inferencer are working quite well. However, I am having difficulties with fixing bugs in the parser. Still trying to fix them...
