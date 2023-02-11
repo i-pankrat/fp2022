@@ -63,7 +63,7 @@ List.Map
 List.Fold
   $ ./demo.exe <<- EOF
   > let rec list_fold list acc f =
-  >   let rec helper l acc = 
+  >   let rec helper l acc =
   >     match l with
   >       | [] -> acc
   >       | hd :: tl -> helper tl (f acc hd)
@@ -74,7 +74,7 @@ List.Fold
 List.append
   $ ./demo.exe <<- EOF
   > let list_append l1 l2 =
-  >   let rec helper l = 
+  >   let rec helper l =
   >     match l with
   >       | [] -> l2
   >       | hd :: tl -> hd :: (helper tl)
@@ -85,11 +85,11 @@ List.append
 List.concat
   $ ./demo.exe <<- EOF
   > let list_concat list =
-  >   let rec concat2 l1 l2 = 
+  >   let rec concat2 l1 l2 =
   >     match l1 with
   >       | [] -> l2
   >       | hd :: tl -> hd :: (concat2 tl l2) in
-  >   let rec helper l = 
+  >   let rec helper l =
   >     match l with
   >       | [] -> []
   >       | hd :: tl -> concat2 hd (helper tl)
@@ -100,7 +100,7 @@ List.concat
 List.filter
   $ ./demo.exe <<- EOF
   > let list_filter list f =
-  >   let rec helper l = 
+  >   let rec helper l =
   >     match l with
   >       | [] -> []
   >       | hd :: tl -> if (f hd) then hd :: (helper tl) else helper tl
@@ -138,7 +138,7 @@ List.assoc_opt
   >   let rec helper l =
   >     match l with
   >     | [] -> \`None
-  >     | hd :: tl -> (match hd with | (f, s) -> 
+  >     | hd :: tl -> (match hd with | (f, s) ->
   >         if el = f then \`Some s else (helper tl))
   >   in
   >   helper list;;
@@ -148,13 +148,13 @@ List.assoc_opt
 List.rev_split
   $ ./demo.exe <<- EOF
   > let rev_split list =
-  >   let rec helper l (f1, s1) = 
+  >   let rec helper l (f1, s1) =
   >     match l with
   >     | [] -> (f1, s1)
-  >     | hd :: tl -> 
-  >       (match hd with 
-  >         | (a, b) -> 
-  >         let f1 = a :: f1 in 
+  >     | hd :: tl ->
+  >       (match hd with
+  >         | (a, b) ->
+  >         let f1 = a :: f1 in
   >         let f2 = b :: s1 in helper tl (f1, f2))
   >   in helper list ([], []);;
   > let res = rev_split [("expression", 1); ("interpret", 2); ("ocaml", 3); ("spbu", 4); ("kakadu", 5); ("i-pankrat", 6)]
@@ -162,7 +162,7 @@ List.rev_split
   - : (string list * int list) = (["i-pankrat"; "kakadu"; "spbu"; "ocaml"; "interpret"; "expression"], [6; 5; 4; 3; 2; 1])
 transform_res
   $ ./demo.exe <<- EOF
-  > let transform_res res = 
+  > let transform_res res =
   >   match res with
   >     | \`None -> \`Error "Failed to get the result"
   >     | \`Some x -> \`Ok x
@@ -180,3 +180,10 @@ snd
   > let result = snd ("Dmitry", "Kosarev")
   > EOF
   - : string = "Kosarev"
+Buggy
+  $ ./demo.exe <<- EOF
+  > let f x k = match x with
+  >     | \`None -> \`Error "Failed to get the result"
+  >     | x -> k x
+  > EOF
+# val f : ([> `None ] as 'a) -> ('a -> ([> `E of string ] as 'b)) -> 'b = <fun>
