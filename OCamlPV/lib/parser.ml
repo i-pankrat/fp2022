@@ -52,11 +52,6 @@ let is_kw = function
   | _ -> false
 ;;
 
-let is_prohibited = function
-  | "=" | "" | "+" | "-" | "(" | ")" | "[" | "]" | "#" | "%" | "^" | "&" -> true
-  | _ -> false
-;;
-
 (** Simple parsers which help to implement more complicated ones *)
 
 let empty = take_while is_empty
@@ -70,6 +65,7 @@ let pparens p = pstoken "(" *> p <* pstoken ")"
 let pquotes p = pstoken "\"" *> p <* pstoken "\""
 let pbrackets p = pstoken "[" *> p <* pstoken "]"
 let pverticalbar p = pstoken "|" *> p
+let parens_or_not p = p <|> pparens p
 
 (** Const constructors *)
 
@@ -80,12 +76,13 @@ let cnill = CNil
 
 (** Const parsers *)
 
-let psign = choice [ pparens @@ (pstoken "-" *> return (-1)); pstoken "" *> return 1 ]
+let psign =
+  choice [ pstoken "+" *> return 1; pstoken "-" *> return (-1); pstoken "" *> return 1 ]
+;;
 
 let pcint =
-  let pdigit = token @@ take_while1 is_digit in
-  lift (fun s -> cint @@ Int.of_string s) pdigit
-  <|> lift2 (fun s v -> cint (s * Int.of_string v)) psign pdigit
+  let pdigit = take_while1 is_digit in
+  lift2 (fun s v -> cint (s * Int.of_string v)) psign pdigit
 ;;
 
 let pcbool = return Bool.of_string <*> (pstoken "true" <|> pstoken "false") >>| cbool
@@ -99,10 +96,10 @@ let pconst = pcint <|> pcbool <|> pcstring <|> pcnil <|> pcunit
 let pIdent cond =
   empty *> take_while1 cond
   >>= fun res ->
-  if is_kw res
+  if String.length res == 0
+  then fail "Not identifier"
+  else if is_kw res
   then fail "You can not use keywords as vars"
-  else if is_prohibited res
-  then fail "You identifier containt prohibited symbols"
   else if Char.is_digit @@ String.get res 0
   then fail "Identifier first sumbol is letter, not digit"
   else return res
@@ -111,9 +108,7 @@ let pIdent cond =
 let pcIdent =
   pIdent is_ident_symbol
   >>= fun res ->
-  if String.length res == 0
-  then fail "Not identifier"
-  else if Char.is_uppercase @@ String.get res 0
+  if Char.is_uppercase @@ String.get res 0
   then return res
   else fail "Not uppercase identifier"
 ;;
@@ -166,7 +161,7 @@ let ppv p decl = choice [ ppv_args p decl; ppv_arg p decl; ppv_noargs decl ]
 let pppv p = ppv p construct_pv
 
 let rec create_cons_dc = function
-  | [] -> failwith "todo"
+  | [] -> PConst CNil
   | hd :: [] when equal_pattern hd (PConst CNil) -> PConst CNil
   | [ f; s ] -> construct_pcons f s
   | hd :: tl -> construct_pcons hd (create_cons_dc tl)
@@ -185,20 +180,18 @@ let parse_cons_semicolon parser constructor =
 let parse_cons_doublecolon parser constructor =
   lift2
     (fun a b -> constructor @@ (a :: b))
-    (parser <* trim @@ pstoken "::")
-    (sep_by1 (trim @@ pstoken "::") parser)
-;;
-
-let parse_tuple_parens parser constructor =
-  constructor <$> pparens @@ sep_by1 (pstoken ",") parser
+    (parser <* pstoken "::")
+    (sep_by1 (pstoken "::") parser)
 ;;
 
 let parse_tuple parser constructor =
   lift2
     (fun a b -> constructor @@ (a :: b))
-    (parser <* trim @@ pstoken ",")
-    (sep_by1 (trim @@ pstoken ",") parser)
+    (parser <* pstoken ",")
+    (sep_by1 (pstoken ",") parser)
 ;;
+
+let parse_tuple_parens parser constructor = pparens @@ parse_tuple parser constructor
 
 type pdispatch =
   { cons_sc : pdispatch -> pattern t
@@ -213,26 +206,34 @@ type pdispatch =
 let pack =
   let pattern pack =
     choice
-      ~failure_msg:"There are no appropriate parser"
-      [ pack.tuple_p pack
-      ; pack.tuple_wp pack
-      ; pack.cons_sc pack
+      [ pack.cons_sc pack
       ; pack.cons_dc pack
+      ; pack.tuple_p pack
+      ; pack.tuple_wp pack
       ; pack.poly_variant pack
       ; pack.value pack
       ]
   in
   let parsers pack =
     choice
-      ~failure_msg:"Can not parse internal list/tuple"
-      [ pack.value pack; pack.tuple_p pack; pack.cons_sc pack ]
+      [ pack.tuple_p pack
+      ; pparens @@ pack.cons_dc pack
+      ; pack.cons_sc pack
+      ; pack.value pack
+      ]
   in
   let value _ = pwild <|> ppvar <|> ppconst in
-  let tuple_p pack = fix @@ fun _ -> parse_tuple_parens (parsers pack) construct_ptuple in
-  let tuple_wp pack = fix @@ fun _ -> parse_tuple (parsers pack) construct_ptuple in
-  let cons_sc pack = fix @@ fun _ -> parse_cons_semicolon (parsers pack) create_cons_sc in
+  let tuple_p pack =
+    fix @@ fun _ -> empty *> parse_tuple_parens (parsers pack) construct_ptuple
+  in
+  let tuple_wp pack =
+    fix @@ fun _ -> empty *> parse_tuple (parsers pack) construct_ptuple
+  in
+  let cons_sc pack =
+    fix @@ fun _ -> empty *> parse_cons_semicolon (parsers pack) create_cons_sc
+  in
   let cons_dc pack =
-    fix @@ fun _ -> parse_cons_doublecolon (parsers pack) create_cons_dc
+    fix @@ fun _ -> empty *> parse_cons_doublecolon (parsers pack) create_cons_dc
   in
   let pvparsers pack =
     choice [ pack.tuple_p pack; pack.cons_sc pack; pack.poly_variant pack; value pack ]
@@ -337,9 +338,8 @@ let etype id par pvtyp = EType (id, par, pvtyp)
 
 let pevar = evar <$> psIdent
 let peconst = pconst >>| fun x -> EConst x
-let parens_or_not p = p <|> pparens p
 let pargs = many @@ parens_or_not @@ ppattern
-let pargs1 = many @@ parens_or_not @@ ppattern
+let pargs1 = many1 @@ parens_or_not @@ ppattern
 
 type edispatch =
   { evar : edispatch -> expr t
@@ -361,7 +361,12 @@ type edispatch =
   }
 
 let econd pif pexpr =
-  lift3 econd (pstoken "if" *> pif) (pstoken1 "then" *> pexpr) (pstoken1 "else" *> pexpr)
+  empty
+  *> lift3
+       econd
+       (pstoken "if" *> pif)
+       (pstoken1 "then" *> pexpr)
+       (pstoken1 "else" *> pexpr)
 ;;
 
 let ematch pmatch pexpr =
@@ -370,7 +375,7 @@ let ematch pmatch pexpr =
   let peline = lift2 (fun c a -> c, a) pecase pearrow in
   let pelines = many1 peline in
   let pematch = pstoken "match" *> pmatch <* pstoken1 "with" in
-  lift2 ematch pematch pelines
+  empty *> lift2 ematch pematch pelines
 ;;
 
 let construct_efun args body =
@@ -382,47 +387,51 @@ let construct_efun args body =
 ;;
 
 let pefun pexpr =
-  lift2
-    (fun args expr -> construct_efun args expr)
-    (pstoken "fun" *> pargs1)
-    (pstoken "->" *> pexpr)
+  empty
+  *> lift2
+       (fun args expr -> construct_efun args expr)
+       (pstoken "fun" *> pargs1)
+       (pstoken "->" *> pexpr)
 ;;
 
-let pepv p = ppv p epolyvariant
+let pepv p = empty *> ppv p epolyvariant
 
 let parse_rec_or_not =
   pstoken "let" *> option "false" (pstoken1 "rec") >>| fun x -> x != "false"
 ;;
 
 let eletfun pexpr =
-  lift4
-    (fun flag name args body ->
-      let body = construct_efun args body in
-      if flag then eletrec name body else elet name body)
-    parse_rec_or_not
-    psIdent
-    pargs
-    (pstoken "=" *> pexpr)
+  empty
+  *> lift4
+       (fun flag name args body ->
+         let body = construct_efun args body in
+         if flag then eletrec name body else elet name body)
+       parse_rec_or_not
+       psIdent
+       pargs
+       (pstoken "=" *> pexpr)
 ;;
 
 let eletdecl pexpr =
   let lift5 f p1 p2 p3 p4 p5 = f <$> p1 <*> p2 <*> p3 <*> p4 <*> p5 in
-  lift5
-    (fun flag name args body1 body2 ->
-      let body1 = construct_efun args body1 in
-      if flag then eletrecin name body1 body2 else eletin name body1 body2)
-    parse_rec_or_not
-    psIdent
-    pargs
-    (pstoken1 "=" *> pexpr)
-    (pstoken1 "in" *> pexpr)
+  empty
+  *> lift5
+       (fun flag name args body1 body2 ->
+         let body1 = construct_efun args body1 in
+         if flag then eletrecin name body1 body2 else eletin name body1 body2)
+       parse_rec_or_not
+       psIdent
+       pargs
+       (pstoken1 "=" *> pexpr)
+       (pstoken1 "in" *> pexpr)
 ;;
 
 let ptyp p =
-  lift2
-    (fun constr typ -> constr, typ)
-    ppvconstructor
-    (option cnotype (pstoken "of" *> p))
+  empty
+  *> lift2
+       (fun constr typ -> constr, typ)
+       ppvconstructor
+       (option cnotype (pstoken "of" *> p))
 ;;
 
 let pfsttyp p = pverticalbar @@ ptyp p <|> ptyp p
@@ -496,23 +505,20 @@ let pbinop expr =
 ;;
 
 let peapply pexpr =
-  lift2
-    (fun expr l -> List.fold_left ~f:eapply ~init:expr l)
-    pexpr
-    (many (token1 @@ pexpr))
+  empty
+  *> lift2
+       (fun expr l ->
+         let res = List.fold_left ~f:eapply ~init:expr l in
+         res)
+       pexpr
+       (many (token1 @@ pexpr))
 ;;
 
 let pack =
   let econst _ = peconst in
   let evar _ = pevar in
-  let lets pack =
-    choice ~failure_msg:"Failed to parse lets" [ pack.elet pack; pack.eletrec pack ]
-    <* empty
-  in
-  let letsin pack =
-    choice ~failure_msg:"Failed to parse letsin" [ pack.eletin pack; pack.eletrecin pack ]
-    <* empty
-  in
+  let lets pack = choice [ pack.elet pack; pack.eletrec pack ] <* empty in
+  let letsin pack = choice [ pack.eletin pack; pack.eletrecin pack ] <* empty in
   let expr pack =
     choice
       ~failure_msg:"Failed to parse expr"
@@ -520,7 +526,6 @@ let pack =
       ; lets pack
       ; pack.etype pack
       ; pack.econdition pack
-      ; pack.ebinop pack
       ; pack.eapply pack
       ; pack.elist pack
       ; pack.etuple pack
@@ -535,13 +540,7 @@ let pack =
     let econd_parser =
       parens_or_not
       @@ choice
-           ~failure_msg:"Failed to parse condition statement"
-           [ pack.econdition pack
-           ; pack.ebinop pack
-           ; pack.eapply pack
-           ; pack.efun pack
-           ; pack.ematch pack
-           ]
+           [ pack.econdition pack; pack.eapply pack; pack.efun pack; pack.ematch pack ]
     in
     econd econd_parser (pack.expr pack)
   in
@@ -549,10 +548,7 @@ let pack =
     fix
     @@ fun _ ->
     let ematch_parse =
-      parens_or_not
-      @@ choice
-           ~failure_msg:"Failed to parse matching expression"
-           [ pack.econdition pack; pack.ematch pack; pack.eapply pack; pack.ebinop pack ]
+      parens_or_not @@ choice [ pack.eapply pack; pack.econdition pack; pack.ematch pack ]
     in
     parens_or_not @@ ematch ematch_parse (pack.expr pack)
   in
@@ -561,13 +557,12 @@ let pack =
     @@ fun _ ->
     let ebinop_parse =
       choice
-        ~failure_msg:"Failed to parse binary operation"
-        [ pack.evar pack
-        ; pack.econst pack
-        ; pparens @@ pack.econdition pack
+        [ pparens @@ pack.econdition pack
         ; pparens @@ pack.ematch pack
-        ; pparens @@ pack.eapply pack
         ; pparens @@ pack.ebinop pack
+        ; pparens @@ pack.eapply pack
+        ; pack.econst pack
+        ; pack.evar pack
         ]
     in
     parens_or_not @@ pbinop ebinop_parse
@@ -577,30 +572,24 @@ let pack =
     fix
     @@ fun _ ->
     let eapply_parse =
-      parens_or_not
-      @@ choice
-           ~failure_msg:"Failed to parse application"
-           [ pack.evar pack
-           ; pack.econst pack
-           ; pack.elist pack
-           ; pack.etuple pack
-           ; pparens @@ pack.efun pack
-           ; pparens @@ pack.econdition pack
-           ; pparens @@ pack.ematch pack
-           ; pparens @@ pack.eapply pack
-           ; pparens @@ pack.ebinop pack
-           ]
+      choice
+        [ pack.ebinop pack
+        ; pack.elist pack
+        ; pack.etuple pack
+        ; pparens @@ pack.efun pack
+        ; pparens @@ pack.econdition pack
+        ; pparens @@ pack.ematch pack
+        ; pparens @@ pack.eapply pack
+        ]
     in
     peapply eapply_parse
   in
   let lets_parsers pack =
     choice
-      ~failure_msg:"Failed to parse lets"
-      [ pack.ebinop pack
+      [ pack.eapply pack
       ; pack.efun pack
       ; pack.econdition pack
       ; pack.ematch pack
-      ; pack.eapply pack
       ; letsin pack
       ; pack.etuple pack
       ; pack.elist pack
@@ -612,7 +601,6 @@ let pack =
   let eletrecin pack = fix @@ fun _ -> eletdecl @@ lets_parsers pack in
   let value_parsers pack =
     choice
-      ~failure_msg:"Failed to parse list"
       [ pack.evar pack
       ; pack.econst pack
       ; pack.etuple pack
@@ -653,8 +641,8 @@ let pack =
 ;;
 
 let pexpr = pack.expr pack
-let pstatements = sep_by1 (pstoken ";;") pexpr
-let parse program = parse_str pstatements program
+let pstatements = sep_by (pstoken ";;") pexpr
+let parse program = parse_str pstatements (String.strip program)
 
 (** Parser tests *)
 
