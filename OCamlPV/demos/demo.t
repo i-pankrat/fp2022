@@ -1,4 +1,4 @@
-Plus 
+Plus
   $ ./demo.exe <<- EOF
   > let x = 2 + 40
   > EOF
@@ -134,12 +134,12 @@ List.find_opt
   - : [> `None | `Some of int ] = `Some (2)
 List.assoc_opt
   $ ./demo.exe <<- EOF
-  > let assoc_opt as list =
+  > let assoc_opt el list =
   >   let rec helper l =
   >     match l with
   >     | [] -> \`None
   >     | hd :: tl -> (match hd with | (f, s) -> 
-  >         if as = f then \`Some s else (helper tl))
+  >         if el = f then \`Some s else (helper tl))
   >   in
   >   helper list;;
   > let res = assoc_opt "i-pankrat" [("expression", 1); ("interpret", 2); ("ocaml", 3); ("spbu", 4); ("kakadu", 5); ("i-pankrat", 6)]

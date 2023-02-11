@@ -1,3 +1,7 @@
+(** Copyright 2022-2023, Ilya Pankratov *)
+
+(** SPDX-License-Identifier: LGPL-3.0-or-later *)
+
 let std_lib =
   {|
   let max a b = if a > b then a else b;;
@@ -62,12 +66,12 @@ let std_lib =
 
   let pair_snd (f, s) = s;;
 
-  let list_assoc_opt as list =
+  let list_assoc_opt el list =
     let rec helper l =
       match l with
       | [] -> `None
       | hd :: tl -> (match hd with | (f, s) -> 
-        if as = f then `Some s else (helper tl))
+        if el = f then `Some s else (helper tl))
       in helper list;;
 
   let list_split list =
