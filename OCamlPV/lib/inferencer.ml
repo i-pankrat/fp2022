@@ -330,6 +330,12 @@ module TypeEnv = struct
   ;;
 
   let find_exn name xs = List.Assoc.find_exn ~equal:String.equal xs name
+
+  let available_bindings env =
+    List.Assoc.map env ~f:(fun schem ->
+      match schem with
+      | S (_, ty) -> ty)
+  ;;
 end
 
 open R
@@ -580,6 +586,8 @@ let check_types env program =
   in
   helper env program
 ;;
+
+let get_available_bindings env = TypeEnv.available_bindings env
 
 let check_types ?(env : environment = empty) e =
   Result.map (run (check_types env e)) ~f:Fun.id
