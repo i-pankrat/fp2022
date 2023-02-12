@@ -99,7 +99,7 @@ module Env (M : FailMonad) = struct
 end
 
 module Interpret (M : FailMonad) : sig
-  val run : ?env:environment -> declaration list -> (environment * value, ierror) M.t
+  val run : ?env:environment -> expr list -> (environment * value, ierror) M.t
 end = struct
   open M
   open Env (M)
@@ -280,6 +280,7 @@ end = struct
     | EPolyVariant (id, exprs) ->
       let* vls = eval_list exprs in
       return (cvpolyvariant id vls)
+    | EType _ -> fail (`NotImplemented "type")
   ;;
 
   let run_expr env expr : (environment * value, ierror) t =
@@ -291,19 +292,14 @@ end = struct
     | _ -> return (env, value)
   ;;
 
-  let run_declaration env = function
-    | DExpr expr -> run_expr env expr
-    | DType _ -> fail (`NotImplemented "type")
-  ;;
-
   let run ?(env : environment = empty) program : (environment * value, ierror) t =
     let rec helper env = function
       | [] -> fail `EmptyInput
       | hd :: [] ->
-        let* env, value = run_declaration env hd in
+        let* env, value = run_expr env hd in
         return (env, value)
       | hd :: tl ->
-        let* env, _ = run_declaration env hd in
+        let* env, _ = run_expr env hd in
         helper env tl
     in
     helper env program
@@ -335,16 +331,15 @@ let run_test t =
 
 (* (1 + 1) * (5 - 2) * (42 / 6) *)
 let test =
-  [ DExpr
-      (EApply
-         ( EApply
-             ( EBinOp Mult
-             , EApply
-                 ( EApply
-                     ( EBinOp Mult
-                     , EApply (EApply (EBinOp Plus, EConst (CInt 1)), EConst (CInt 1)) )
-                 , EApply (EApply (EBinOp Minus, EConst (CInt 5)), EConst (CInt 2)) ) )
-         , EApply (EApply (EBinOp Divide, EConst (CInt 42)), EConst (CInt 6)) ))
+  [ EApply
+      ( EApply
+          ( EBinOp Mult
+          , EApply
+              ( EApply
+                  ( EBinOp Mult
+                  , EApply (EApply (EBinOp Plus, EConst (CInt 1)), EConst (CInt 1)) )
+              , EApply (EApply (EBinOp Minus, EConst (CInt 5)), EConst (CInt 2)) ) )
+      , EApply (EApply (EBinOp Divide, EConst (CInt 42)), EConst (CInt 6)) )
   ]
 ;;
 
@@ -356,11 +351,10 @@ let%test _ =
 
 (* Increment function *)
 let test =
-  [ DExpr
-      (ELetIn
-         ( "inc"
-         , EFun (PVar "x", EApply (EApply (EBinOp Plus, EConst (CInt 1)), EVar "x"))
-         , EApply (EVar "inc", EConst (CInt 5)) ))
+  [ ELetIn
+      ( "inc"
+      , EFun (PVar "x", EApply (EApply (EBinOp Plus, EConst (CInt 1)), EVar "x"))
+      , EApply (EVar "inc", EConst (CInt 5)) )
   ]
 ;;
 
@@ -372,32 +366,28 @@ let%test _ =
 
 (* Sum of two variables *)
 let test =
-  [ DExpr
-      (ELetIn
-         ( "sum"
-         , EFun
-             (PVar "a", EFun (PVar "b", EApply (EApply (EBinOp Plus, EVar "a"), EVar "b")))
-         , EApply (EApply (EVar "sum", EConst (CInt 2)), EConst (CInt 3)) ))
+  [ ELetIn
+      ( "sum"
+      , EFun (PVar "a", EFun (PVar "b", EApply (EApply (EBinOp Plus, EVar "a"), EVar "b")))
+      , EApply (EApply (EVar "sum", EConst (CInt 2)), EConst (CInt 3)) )
   ]
 ;;
 
 (* Sum of the first n natural numbers *)
 let test =
-  [ DExpr
-      (ELetRecIn
-         ( "sumn"
-         , EFun
-             ( PVar "x"
-             , EIfThenElse
-                 ( EApply (EApply (EBinOp Eq, EConst (CInt 1)), EVar "x")
-                 , EConst (CInt 1)
-                 , EApply
-                     ( EApply (EBinOp Plus, EVar "x")
-                     , EApply
-                         ( EVar "sumn"
-                         , EApply (EApply (EBinOp Minus, EVar "x"), EConst (CInt 1)) ) )
-                 ) )
-         , EApply (EVar "sumn", EConst (CInt 100)) ))
+  [ ELetRecIn
+      ( "sumn"
+      , EFun
+          ( PVar "x"
+          , EIfThenElse
+              ( EApply (EApply (EBinOp Eq, EConst (CInt 1)), EVar "x")
+              , EConst (CInt 1)
+              , EApply
+                  ( EApply (EBinOp Plus, EVar "x")
+                  , EApply
+                      ( EVar "sumn"
+                      , EApply (EApply (EBinOp Minus, EVar "x"), EConst (CInt 1)) ) ) ) )
+      , EApply (EVar "sumn", EConst (CInt 100)) )
   ]
 ;;
 
@@ -409,26 +399,23 @@ let%test _ =
 
 (* Fibonacci function *)
 let test =
-  [ DExpr
-      (ELetRecIn
-         ( "fib"
-         , EFun
-             ( PVar "n"
-             , EIfThenElse
-                 ( EApply (EApply (EBinOp Gtq, EConst (CInt 1)), EVar "n")
-                 , EConst (CInt 1)
-                 , EApply
-                     ( EApply
-                         ( EBinOp Plus
-                         , EApply
-                             ( EVar "fib"
-                             , EApply (EApply (EBinOp Minus, EVar "n"), EConst (CInt 1))
-                             ) )
-                     , EApply
-                         ( EVar "fib"
-                         , EApply (EApply (EBinOp Minus, EVar "n"), EConst (CInt 2)) ) )
-                 ) )
-         , EApply (EVar "fib", EConst (CInt 15)) ))
+  [ ELetRecIn
+      ( "fib"
+      , EFun
+          ( PVar "n"
+          , EIfThenElse
+              ( EApply (EApply (EBinOp Gtq, EConst (CInt 1)), EVar "n")
+              , EConst (CInt 1)
+              , EApply
+                  ( EApply
+                      ( EBinOp Plus
+                      , EApply
+                          ( EVar "fib"
+                          , EApply (EApply (EBinOp Minus, EVar "n"), EConst (CInt 1)) ) )
+                  , EApply
+                      ( EVar "fib"
+                      , EApply (EApply (EBinOp Minus, EVar "n"), EConst (CInt 2)) ) ) ) )
+      , EApply (EVar "fib", EConst (CInt 15)) )
   ]
 ;;
 
@@ -440,23 +427,21 @@ let%test _ =
 
 (* Factorial function *)
 let test =
-  [ DExpr
-      (ELetRecIn
-         ( "fac"
-         , EFun
-             ( PVar "n"
-             , EIfThenElse
-                 ( EApply (EApply (EBinOp Eq, EConst (CInt 1)), EVar "n")
-                 , EConst (CInt 1)
-                 , EApply
-                     ( EApply
-                         ( EBinOp Mult
-                         , EApply
-                             ( EVar "fac"
-                             , EApply (EApply (EBinOp Minus, EVar "n"), EConst (CInt 1))
-                             ) )
-                     , EVar "n" ) ) )
-         , EApply (EVar "fac", EConst (CInt 5)) ))
+  [ ELetRecIn
+      ( "fac"
+      , EFun
+          ( PVar "n"
+          , EIfThenElse
+              ( EApply (EApply (EBinOp Eq, EConst (CInt 1)), EVar "n")
+              , EConst (CInt 1)
+              , EApply
+                  ( EApply
+                      ( EBinOp Mult
+                      , EApply
+                          ( EVar "fac"
+                          , EApply (EApply (EBinOp Minus, EVar "n"), EConst (CInt 1)) ) )
+                  , EVar "n" ) ) )
+      , EApply (EVar "fac", EConst (CInt 5)) )
   ]
 ;;
 
@@ -468,33 +453,31 @@ let%test _ =
 
 (* Sum of the list *)
 let test =
-  [ DExpr
-      (ELetIn
-         ( "list_sum"
-         , EFun
-             ( PVar "list"
-             , ELetRecIn
-                 ( "helper"
-                 , EFun
-                     ( PVar "x"
-                     , EFun
-                         ( PVar "acc"
-                         , EMatch
-                             ( EVar "x"
-                             , [ PConst CNil, EVar "acc"
-                               ; ( PCons (PVar "head", PVar "tail")
-                                 , EApply
-                                     ( EApply (EVar "helper", EVar "tail")
-                                     , EApply
-                                         (EApply (EBinOp Plus, EVar "acc"), EVar "head")
-                                     ) )
-                               ] ) ) )
-                 , EApply (EApply (EVar "helper", EVar "list"), EConst (CInt 0)) ) )
-         , EApply
-             ( EVar "list_sum"
-             , EList
-                 ( EConst (CInt 1)
-                 , EList (EConst (CInt 2), EList (EConst (CInt 3), EConst CNil)) ) ) ))
+  [ ELetIn
+      ( "list_sum"
+      , EFun
+          ( PVar "list"
+          , ELetRecIn
+              ( "helper"
+              , EFun
+                  ( PVar "x"
+                  , EFun
+                      ( PVar "acc"
+                      , EMatch
+                          ( EVar "x"
+                          , [ PConst CNil, EVar "acc"
+                            ; ( PCons (PVar "head", PVar "tail")
+                              , EApply
+                                  ( EApply (EVar "helper", EVar "tail")
+                                  , EApply (EApply (EBinOp Plus, EVar "acc"), EVar "head")
+                                  ) )
+                            ] ) ) )
+              , EApply (EApply (EVar "helper", EVar "list"), EConst (CInt 0)) ) )
+      , EApply
+          ( EVar "list_sum"
+          , EList
+              ( EConst (CInt 1)
+              , EList (EConst (CInt 2), EList (EConst (CInt 3), EConst CNil)) ) ) )
   ]
 ;;
 
@@ -506,31 +489,28 @@ let%test _ =
 
 (* List.map function *)
 let test =
-  [ DExpr
-      (ELetRecIn
-         ( "list_map"
-         , EFun
-             ( PVar "f"
-             , EFun
-                 ( PVar "list"
-                 , EMatch
-                     ( EVar "list"
-                     , [ PConst CNil, EConst CNil
-                       ; ( PCons (PVar "head", PVar "tail")
-                         , EApply
-                             ( EApply (EBinOp ConsConcat, EApply (EVar "f", EVar "head"))
-                             , EApply (EApply (EVar "list_map", EVar "f"), EVar "tail") )
-                         )
-                       ] ) ) )
-         , EApply
-             ( EApply
-                 ( EVar "list_map"
-                 , EFun
-                     (PVar "x", EApply (EApply (EBinOp Mult, EVar "x"), EConst (CInt 2)))
-                 )
-             , EList
-                 ( EConst (CInt 1)
-                 , EList (EConst (CInt 2), EList (EConst (CInt 3), EConst CNil)) ) ) ))
+  [ ELetRecIn
+      ( "list_map"
+      , EFun
+          ( PVar "f"
+          , EFun
+              ( PVar "list"
+              , EMatch
+                  ( EVar "list"
+                  , [ PConst CNil, EConst CNil
+                    ; ( PCons (PVar "head", PVar "tail")
+                      , EApply
+                          ( EApply (EBinOp ConsConcat, EApply (EVar "f", EVar "head"))
+                          , EApply (EApply (EVar "list_map", EVar "f"), EVar "tail") ) )
+                    ] ) ) )
+      , EApply
+          ( EApply
+              ( EVar "list_map"
+              , EFun (PVar "x", EApply (EApply (EBinOp Mult, EVar "x"), EConst (CInt 2)))
+              )
+          , EList
+              ( EConst (CInt 1)
+              , EList (EConst (CInt 2), EList (EConst (CInt 3), EConst CNil)) ) ) )
   ]
 ;;
 
@@ -542,42 +522,38 @@ let%test _ =
 
 (* List.fold function *)
 let test =
-  [ DExpr
-      (ELetRec
-         ( "list_fold"
-         , EFun
-             ( PVar "list"
-             , EFun
-                 ( PVar "acc"
-                 , EFun
-                     ( PVar "f"
-                     , EMatch
-                         ( EVar "list"
-                         , [ PConst CNil, EVar "acc"
-                           ; ( PCons (PVar "head", PVar "tail")
-                             , EApply
-                                 ( EApply
-                                     ( EApply (EVar "list_fold", EVar "tail")
-                                     , EApply (EApply (EVar "f", EVar "acc"), EVar "head")
-                                     )
-                                 , EVar "f" ) )
-                           ] ) ) ) ) ))
-  ; DExpr
-      (ELet
-         ( "list_sum"
-         , EApply
-             ( EApply
-                 ( EApply
-                     ( EVar "list_fold"
-                     , EList
-                         ( EConst (CInt 1)
-                         , EList (EConst (CInt 2), EList (EConst (CInt 3), EConst CNil))
-                         ) )
-                 , EConst (CInt 0) )
-             , EFun
-                 ( PVar "accum"
-                 , EFun (PVar "x", EApply (EApply (EBinOp Plus, EVar "accum"), EVar "x"))
-                 ) ) ))
+  [ ELetRec
+      ( "list_fold"
+      , EFun
+          ( PVar "list"
+          , EFun
+              ( PVar "acc"
+              , EFun
+                  ( PVar "f"
+                  , EMatch
+                      ( EVar "list"
+                      , [ PConst CNil, EVar "acc"
+                        ; ( PCons (PVar "head", PVar "tail")
+                          , EApply
+                              ( EApply
+                                  ( EApply (EVar "list_fold", EVar "tail")
+                                  , EApply (EApply (EVar "f", EVar "acc"), EVar "head") )
+                              , EVar "f" ) )
+                        ] ) ) ) ) )
+  ; ELet
+      ( "list_sum"
+      , EApply
+          ( EApply
+              ( EApply
+                  ( EVar "list_fold"
+                  , EList
+                      ( EConst (CInt 1)
+                      , EList (EConst (CInt 2), EList (EConst (CInt 3), EConst CNil)) ) )
+              , EConst (CInt 0) )
+          , EFun
+              ( PVar "accum"
+              , EFun (PVar "x", EApply (EApply (EBinOp Plus, EVar "accum"), EVar "x")) )
+          ) )
   ]
 ;;
 
@@ -589,50 +565,47 @@ let%test _ =
 
 (* List.nth_opt function *)
 let test n =
-  [ DExpr
-      (ELet
-         ( "nth_opt"
-         , EFun
-             ( PVar "list"
-             , EFun
-                 ( PVar "number"
-                 , ELetRecIn
-                     ( "helper"
-                     , EFun
-                         ( PVar "l"
-                         , EFun
-                             ( PVar "n"
-                             , EMatch
-                                 ( EVar "l"
-                                 , [ PConst CNil, EPolyVariant ("`None", [])
-                                   ; ( PCons (PVar "hd", PVar "tl")
-                                     , EIfThenElse
-                                         ( EApply
-                                             ( EApply
-                                                 ( EBinOp Eq
-                                                 , EApply
-                                                     ( EApply (EBinOp Plus, EVar "n")
-                                                     , EConst (CInt 1) ) )
-                                             , EVar "number" )
-                                         , EPolyVariant ("`Some", [ EVar "hd" ])
-                                         , EApply
-                                             ( EApply (EVar "helper", EVar "tl")
-                                             , EApply
-                                                 ( EApply (EBinOp Plus, EVar "n")
-                                                 , EConst (CInt 1) ) ) ) )
-                                   ] ) ) )
-                     , EApply (EApply (EVar "helper", EVar "list"), EConst (CInt 0)) ) )
-             ) ))
-  ; DExpr
-      (ELet
-         ( "res"
-         , EApply
-             ( EApply
-                 ( EVar "nth_opt"
-                 , EList
-                     ( EConst (CInt 1)
-                     , EList (EConst (CInt 2), EList (EConst (CInt 3), EConst CNil)) ) )
-             , EConst (CInt n) ) ))
+  [ ELet
+      ( "nth_opt"
+      , EFun
+          ( PVar "list"
+          , EFun
+              ( PVar "number"
+              , ELetRecIn
+                  ( "helper"
+                  , EFun
+                      ( PVar "l"
+                      , EFun
+                          ( PVar "n"
+                          , EMatch
+                              ( EVar "l"
+                              , [ PConst CNil, EPolyVariant ("`None", [])
+                                ; ( PCons (PVar "hd", PVar "tl")
+                                  , EIfThenElse
+                                      ( EApply
+                                          ( EApply
+                                              ( EBinOp Eq
+                                              , EApply
+                                                  ( EApply (EBinOp Plus, EVar "n")
+                                                  , EConst (CInt 1) ) )
+                                          , EVar "number" )
+                                      , EPolyVariant ("`Some", [ EVar "hd" ])
+                                      , EApply
+                                          ( EApply (EVar "helper", EVar "tl")
+                                          , EApply
+                                              ( EApply (EBinOp Plus, EVar "n")
+                                              , EConst (CInt 1) ) ) ) )
+                                ] ) ) )
+                  , EApply (EApply (EVar "helper", EVar "list"), EConst (CInt 0)) ) ) ) )
+  ; ELet
+      ( "res"
+      , EApply
+          ( EApply
+              ( EVar "nth_opt"
+              , EList
+                  ( EConst (CInt 1)
+                  , EList (EConst (CInt 2), EList (EConst (CInt 3), EConst CNil)) ) )
+          , EConst (CInt n) ) )
   ]
 ;;
 
@@ -651,38 +624,35 @@ let%test _ =
 (* List.find_opt function *)
 
 let test n =
-  [ DExpr
-      (ELet
-         ( "find_opt"
-         , EFun
-             ( PVar "f"
-             , EFun
-                 ( PVar "list"
-                 , ELetRecIn
-                     ( "helper"
-                     , EFun
-                         ( PVar "l"
-                         , EMatch
-                             ( EVar "l"
-                             , [ PConst CNil, EPolyVariant ("`None", [])
-                               ; ( PCons (PVar "hd", PVar "tl")
-                                 , EIfThenElse
-                                     ( EApply (EVar "f", EVar "hd")
-                                     , EPolyVariant ("`Some", [ EVar "hd" ])
-                                     , EApply (EVar "helper", EVar "tl") ) )
-                               ] ) )
-                     , EApply (EVar "helper", EVar "list") ) ) ) ))
-  ; DExpr
-      (ELet
-         ( "res"
-         , EApply
-             ( EApply
-                 ( EVar "find_opt"
-                 , EFun (PVar "x", EApply (EApply (EBinOp Eq, EConst (CInt n)), EVar "x"))
-                 )
-             , EList
-                 ( EConst (CInt 1)
-                 , EList (EConst (CInt 2), EList (EConst (CInt 3), EConst CNil)) ) ) ))
+  [ ELet
+      ( "find_opt"
+      , EFun
+          ( PVar "f"
+          , EFun
+              ( PVar "list"
+              , ELetRecIn
+                  ( "helper"
+                  , EFun
+                      ( PVar "l"
+                      , EMatch
+                          ( EVar "l"
+                          , [ PConst CNil, EPolyVariant ("`None", [])
+                            ; ( PCons (PVar "hd", PVar "tl")
+                              , EIfThenElse
+                                  ( EApply (EVar "f", EVar "hd")
+                                  , EPolyVariant ("`Some", [ EVar "hd" ])
+                                  , EApply (EVar "helper", EVar "tl") ) )
+                            ] ) )
+                  , EApply (EVar "helper", EVar "list") ) ) ) )
+  ; ELet
+      ( "res"
+      , EApply
+          ( EApply
+              ( EVar "find_opt"
+              , EFun (PVar "x", EApply (EApply (EBinOp Eq, EConst (CInt n)), EVar "x")) )
+          , EList
+              ( EConst (CInt 1)
+              , EList (EConst (CInt 2), EList (EConst (CInt 3), EConst CNil)) ) ) )
   ]
 ;;
 
@@ -699,20 +669,18 @@ let%test _ =
 ;;
 
 let test name constr =
-  [ DExpr
-      (ELet
-         ( "transform_res"
-         , EFun
-             ( PVar "res"
-             , EMatch
-                 ( EVar "res"
-                 , [ ( PPolyVariant ("`None", [])
-                     , EPolyVariant
-                         ("`Error", [ EConst (CString "Failed to get the result") ]) )
-                   ; ( PPolyVariant ("`Some", [ PVar "x" ])
-                     , EPolyVariant ("`Ok", [ EVar "x" ]) )
-                   ] ) ) ))
-  ; DExpr (ELet ("res", EApply (EVar "transform_res", EPolyVariant (name, constr))))
+  [ ELet
+      ( "transform_res"
+      , EFun
+          ( PVar "res"
+          , EMatch
+              ( EVar "res"
+              , [ ( PPolyVariant ("`None", [])
+                  , EPolyVariant
+                      ("`Error", [ EConst (CString "Failed to get the result") ]) )
+                ; PPolyVariant ("`Some", [ PVar "x" ]), EPolyVariant ("`Ok", [ EVar "x" ])
+                ] ) ) )
+  ; ELet ("res", EApply (EVar "transform_res", EPolyVariant (name, constr)))
   ]
 ;;
 

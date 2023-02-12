@@ -32,4 +32,4 @@ val pp_ierror : Format.formatter -> ierror -> unit
 val empty : environment
 
 (** Interpret ast *)
-val run : ?env:environment -> Ast.declaration list -> (environment * value, ierror) result
+val run : ?env:environment -> Ast.expr list -> (environment * value, ierror) result

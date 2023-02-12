@@ -23,5 +23,5 @@ val get_available_bindings : environment -> (string, Typedtree.ty) Base.List.Ass
 (** Check types of input expressions *)
 val check_types
   :  ?env:environment
-  -> Ast.declaration list
+  -> Ast.expr list
   -> (environment * Typedtree.ty, error) result

@@ -75,14 +75,10 @@ and expr =
   | ETuple of expr list (* Represents tuple: [expr; expr; expr] = (expr, expr, expr) *)
   | EPolyVariant of id * expr list
       (** Polymorphic variants, where id represents constructor and expr -- arguments *)
-[@@deriving show { with_path = false }]
-
-type declaration =
-  | DExpr of expr (** Expressions *)
-  | DType of id * parameters * (id * pvtype) list
+  | EType of id * parameters * (id * pvtype) list
       (** Represent typ declaration: type parameters id = (id * pvtype) list.
           It is possible to declare only polymorphic variants. *)
 [@@deriving show { with_path = false }]
 
 (** Represents the sequence of expr *)
-type statements = declaration list [@@deriving show { with_path = false }]
+and statements = expr list [@@deriving show { with_path = false }]

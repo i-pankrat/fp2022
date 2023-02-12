@@ -5,4 +5,4 @@
 type error
 
 val pp_error : Format.formatter -> error -> unit
-val parse : string -> (Ast.declaration list, error) result
+val parse : string -> (Ast.expr list, error) result
