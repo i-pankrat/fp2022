@@ -586,6 +586,7 @@ let pack =
         ; pparens @@ pack.econdition pack
         ; pparens @@ pack.ematch pack
         ; pparens @@ pack.eapply pack
+        ; pack.epv pack
         ]
     in
     peapply eapply_parse
@@ -599,6 +600,7 @@ let pack =
       ; letsin pack
       ; pack.etuple pack
       ; pack.elist pack
+      ; pack.epv pack
       ]
   in
   let elet pack = fix @@ fun _ -> eletfun @@ lets_parsers pack in

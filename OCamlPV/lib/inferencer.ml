@@ -236,6 +236,8 @@ end = struct
       compose subs1 subs2
     | List a, List b -> unify a b
     | Tuple a, Tuple b -> unify_lists a b
+    | LessTags (bind1, tag1), MoreTags (bind2, tag2)
+    | MoreTags (bind1, tag1), LessTags (bind2, tag2)
     | MoreTags (bind1, tag1), MoreTags (bind2, tag2) ->
       process_tags bind1 tag1 bind2 tag2 moretags_typ
     | LessTags (bind1, tag1), LessTags (bind2, tag2) ->
@@ -488,7 +490,8 @@ let infer =
     | EMatch (cond, matches) ->
       let* cond_sub, cond_ty = helper env cond in
       let env = TypeEnv.apply cond_sub env in
-      let rec (matches_helper : (pattern * expr) list -> (Subst.t * ty) R.t) = function
+      let rec (matches_helper : (pattern * expr) list -> (Subst.t * ty * ty) R.t)
+        = function
         | [] -> fail `Empty_pattern
         | hd :: [] ->
           (match hd with
@@ -497,15 +500,24 @@ let infer =
              let* s1 = unify cond_ty pat_ty in
              let* s2, expr_ty = helper (TypeEnv.apply s1 pat_env) expr in
              let* finalsub = Subst.compose s1 s2 in
-             return (finalsub, Subst.apply finalsub expr_ty))
+             return (finalsub, Subst.apply finalsub expr_ty, pat_ty))
         | hd :: tl ->
-          let* s1, ty1 = matches_helper [ hd ] in
-          let* s2, ty2 = matches_helper tl in
-          let* s3 = unify ty1 ty2 in
-          let* finalsubst = Subst.compose_all [ s1; s2; s3 ] in
-          return (finalsubst, Subst.apply s3 ty1)
+          let* s1, ty1, pattern1 = matches_helper [ hd ] in
+          let* s2, ty2, pattern2 = matches_helper tl in
+          let* s3 =
+            match pattern1, pattern2 with
+            | LessTags (a, b), Ty_var t ->
+              let moretag = moretags_typ a b in
+              let* s1 = Subst.singleton a moretag in
+              let* s2 = Subst.singleton t moretag in
+              Subst.compose s1 s2
+            | _ -> return Subst.empty
+          in
+          let* s4 = unify ty1 ty2 in
+          let* finalsubst = Subst.compose_all [ s1; s2; s3; s4 ] in
+          return (finalsubst, Subst.apply s3 ty1, pattern1)
       in
-      let* match_sub, match_ty = matches_helper matches in
+      let* match_sub, match_ty, _ = matches_helper matches in
       let* finalmatchsub = Subst.compose cond_sub match_sub in
       return (finalmatchsub, Subst.apply finalmatchsub match_ty)
     | EList (h, t) ->

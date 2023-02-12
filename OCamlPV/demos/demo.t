@@ -180,10 +180,23 @@ snd
   > let result = snd ("Dmitry", "Kosarev")
   > EOF
   - : string = "Kosarev"
-Buggy
+Wildcard
   $ ./demo.exe <<- EOF
   > let f x k = match x with
   >     | \`None -> \`Error "Failed to get the result"
   >     | x -> k x
   > EOF
-# val f : ([> `None ] as 'a) -> ('a -> ([> `E of string ] as 'b)) -> 'b = <fun>
+  - : ([> `None ] -> (([> `None ] -> [> `Error of string ]) -> [> `Error of string ])) = <fun>
+  $ ./demo.exe <<- EOF
+  > let f x k = match x with
+  >     | \`None -> \`Error "Failed to get the result"
+  >     | _ -> k x
+  > EOF
+  - : ([> `None ] -> (([> `None ] -> [> `Error of string ]) -> [> `Error of string ])) = <fun>
+  $ ./demo.exe <<- EOF
+  > let f x k = match x with
+  >     | \`None -> \`Error "Failed to get the result"
+  >     | _ -> k x;;
+  > f \`Something (fun x -> match x with | _ -> \`Ok)
+  > EOF
+  - : [> `Error of string | `Ok ] = `Ok ()
