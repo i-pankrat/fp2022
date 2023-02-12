@@ -469,13 +469,13 @@ let pbinop expr =
   let prior3 =
     empty
     *> choice
-         [ string ">" *> return egt
-         ; string ">=" *> return egtq
-         ; string "<" *> return elt
+         [ string ">=" *> return egtq
+         ; string ">" *> return egt
          ; string "<=" *> return eltq
+         ; string "<" *> return elt
          ]
   in
-  let prior4 = empty *> choice [ string "=" *> return eeq; string "<>" *> return eneq ] in
+  let prior4 = empty *> choice [ string "=" *> return eeq; string "!=" *> return eneq ] in
   let prior5 = empty *> string "&&" *> return eand in
   let prior6 = empty *> string "||" *> return eor in
   let expr = chainl1 expr prior1 in
@@ -993,6 +993,40 @@ let%expect_test _ =
         (EApply ((EApply ((EBinOp ConsConcat), (EConst (CInt 1)))), (EVar "list"))) |}]
 ;;
 
+let%expect_test _ =
+  interprete_parse_result show_expr pexpr "a > 1";
+  [%expect
+    {|
+        (EApply ((EApply ((EBinOp Gt), (EVar "a"))), (EConst (CInt 1)))) |}]
+;;
+
+let%expect_test _ =
+  interprete_parse_result show_expr pexpr "a >= 1";
+  [%expect
+    {|
+        (EApply ((EApply ((EBinOp Gtq), (EVar "a"))), (EConst (CInt 1)))) |}]
+;;
+
+let%expect_test _ =
+  interprete_parse_result show_expr pexpr "a < 1";
+  [%expect
+    {|
+        (EApply ((EApply ((EBinOp Lt), (EVar "a"))), (EConst (CInt 1)))) |}]
+;;
+
+let%expect_test _ =
+  interprete_parse_result show_expr pexpr "a <= 1";
+  [%expect
+    {|
+        (EApply ((EApply ((EBinOp Ltq), (EVar "a"))), (EConst (CInt 1)))) |}]
+;;
+
+let%expect_test _ =
+  interprete_parse_result show_expr pexpr "a != 1";
+  [%expect
+    {|
+        (EApply ((EApply ((EBinOp Neq), (EVar "a"))), (EConst (CInt 1)))) |}]
+;;
 (** Test application *)
 
 let%expect_test _ =
