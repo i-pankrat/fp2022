@@ -8,11 +8,11 @@ type const =
   | CInt of int (** Represents integer numbers: ..., -1, 0, 1, ... *)
   | CBool of bool (** Represents boolean values: false and true *)
   | CNil (** Represents empty list: [] *)
-  | CString of string (** Represents string values: "Hellow, world!" *)
+  | CString of string (** Represents string values: "Hello, world!" *)
   | CUnit (** Repsenets () *)
 [@@deriving eq, show { with_path = false }]
 
-and bin_op =
+type bin_op =
   | Plus (** Addition: + *)
   | Minus (** Subtraction:  - *)
   | Mult (** Multiplication: * *)
@@ -27,9 +27,9 @@ and bin_op =
   | Gtq (** Comparison operator: >= *)
   | Ltq (** Comparison operator: <= *)
   | ConsConcat (** Add element to the head of the list: 1 :: [2; 3] = [1; 2; 3]*)
-[@@deriving show { with_path = false }]
+[@@deriving eq, show { with_path = false }]
 
-and pattern =
+type pattern =
   | PConst of const (** Represents constant patterns *)
   | PVar of id (** Represents varuable patterns *)
   | PTuple of pattern list (** Repsenets tuple pattern: (a, b) *)
