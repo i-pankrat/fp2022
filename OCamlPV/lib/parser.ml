@@ -995,8 +995,7 @@ let%expect_test _ =
 
 let%expect_test _ =
   interprete_parse_result show_expr pexpr "a > 1";
-  [%expect
-    {|
+  [%expect {|
         (EApply ((EApply ((EBinOp Gt), (EVar "a"))), (EConst (CInt 1)))) |}]
 ;;
 
@@ -1009,8 +1008,7 @@ let%expect_test _ =
 
 let%expect_test _ =
   interprete_parse_result show_expr pexpr "a < 1";
-  [%expect
-    {|
+  [%expect {|
         (EApply ((EApply ((EBinOp Lt), (EVar "a"))), (EConst (CInt 1)))) |}]
 ;;
 
@@ -1027,6 +1025,7 @@ let%expect_test _ =
     {|
         (EApply ((EApply ((EBinOp Neq), (EVar "a"))), (EConst (CInt 1)))) |}]
 ;;
+
 (** Test application *)
 
 let%expect_test _ =

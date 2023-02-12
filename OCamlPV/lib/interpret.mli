@@ -15,7 +15,7 @@ type value =
   | VTuple of value list (** Represents tuples: (value1, value2, ... ) *)
   | VList of value list (** Represents lists: [value1; value2; ... ]*)
   | VFun of Ast.pattern * Ast.expr * (Ast.id * value) list
-      (** Represents function that is not applied to its pattern *)
+      (** Represents function: fun x -> x *)
   | VBinOp of value binop
       (** Represents binaty operation with no arguments applied and one argument applied *)
   | VPolyVariant of Ast.id * value list
