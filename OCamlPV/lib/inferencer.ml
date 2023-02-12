@@ -558,14 +558,13 @@ let infer =
       in
       let* fv = fresh in
       return (s, moretags_typ fv [ constructor, t ])
-    | EType (_, _, _) -> fail (`Not_implemented "type")
   in
   helper
 ;;
 
 let empty : environment = TypeEnv.empty
 
-let check_type env expr =
+let check_expr_type env expr =
   let* _, typ = infer env expr in
   match expr with
   | ELet (name, _) | ELetIn (name, _, _) | ELetRec (name, _) | ELetRecIn (name, _, _) ->
@@ -574,14 +573,21 @@ let check_type env expr =
   | _ -> return (env, typ)
 ;;
 
+let check_declaration_type env =
+  let open Ast in
+  function
+  | DExpr expr -> check_expr_type env expr
+  | DType _ -> fail (`Not_implemented "type")
+;;
+
 let check_types env program =
   let rec helper env = function
     | [] -> fail `Empty_input
     | hd :: [] ->
-      let* env, typ = check_type env hd in
+      let* env, typ = check_declaration_type env hd in
       return (env, typ)
     | hd :: tl ->
-      let* env, _ = check_type env hd in
+      let* env, _ = check_declaration_type env hd in
       helper env tl
   in
   helper env program
@@ -675,7 +681,7 @@ let run_infer = function
 let%expect_test _ =
   let open Ast in
   let _ =
-    let e = [ EConst (CInt 4) ] in
+    let e = [ DExpr (EConst (CInt 4)) ] in
     check_types e |> run_infer
   in
   [%expect {| int |}]
@@ -684,7 +690,7 @@ let%expect_test _ =
 let%expect_test _ =
   let open Ast in
   let _ =
-    let e = [ EConst (CBool true) ] in
+    let e = [ DExpr (EConst (CBool true)) ] in
     check_types e |> run_infer
   in
   [%expect {| bool |}]
@@ -695,7 +701,9 @@ let%expect_test _ =
 let%expect_test _ =
   let open Ast in
   let _ =
-    let e = [ EIfThenElse (EConst (CBool true), EConst (CInt 4), EConst (CInt 5)) ] in
+    let e =
+      [ DExpr (EIfThenElse (EConst (CBool true), EConst (CInt 4), EConst (CInt 5))) ]
+    in
     check_types e |> run_infer
   in
   [%expect {| int |}]
@@ -706,7 +714,7 @@ let%expect_test _ =
 let%expect_test _ =
   let open Ast in
   let _ =
-    let e = [ EApply (EApply (EBinOp Plus, EConst (CInt 4)), EConst (CInt 4)) ] in
+    let e = [ DExpr (EApply (EApply (EBinOp Plus, EConst (CInt 4)), EConst (CInt 4))) ] in
     check_types e |> run_infer
   in
   [%expect {| int |}]
@@ -715,7 +723,9 @@ let%expect_test _ =
 let%expect_test _ =
   let open Ast in
   let _ =
-    let e = [ EApply (EApply (EBinOp And, EConst (CBool true)), EConst (CBool false)) ] in
+    let e =
+      [ DExpr (EApply (EApply (EBinOp And, EConst (CBool true)), EConst (CBool false))) ]
+    in
     check_types e |> run_infer
   in
   [%expect {| bool |}]
@@ -726,7 +736,9 @@ let%expect_test _ =
 let%expect_test _ =
   let open Ast in
   let _ =
-    let e = [ EFun (PVar "x", EApply (EApply (EBinOp Mult, EVar "x"), EVar "x")) ] in
+    let e =
+      [ DExpr (EFun (PVar "x", EApply (EApply (EBinOp Mult, EVar "x"), EVar "x"))) ]
+    in
     check_types e |> run_infer
   in
   [%expect {| (int -> int) |}]
@@ -736,9 +748,10 @@ let%expect_test _ =
   let open Ast in
   let _ =
     let e =
-      [ EFun
-          ( PCons (PVar "a", PCons (PVar "b", PConst CNil))
-          , EApply (EApply (EBinOp Mult, EVar "a"), EVar "b") )
+      [ DExpr
+          (EFun
+             ( PCons (PVar "a", PCons (PVar "b", PConst CNil))
+             , EApply (EApply (EBinOp Mult, EVar "a"), EVar "b") ))
       ]
     in
     check_types e |> run_infer
@@ -752,10 +765,11 @@ let%expect_test _ =
   let open Ast in
   let _ =
     let e =
-      [ ELetIn
-          ( "x"
-          , EApply (EApply (EBinOp Mult, EConst (CInt 5)), EConst (CInt 5))
-          , EApply (EApply (EBinOp Mult, EConst (CInt 2)), EVar "x") )
+      [ DExpr
+          (ELetIn
+             ( "x"
+             , EApply (EApply (EBinOp Mult, EConst (CInt 5)), EConst (CInt 5))
+             , EApply (EApply (EBinOp Mult, EConst (CInt 2)), EVar "x") ))
       ]
     in
     check_types e |> run_infer
@@ -769,9 +783,11 @@ let%expect_test _ =
   let open Ast in
   let _ =
     let e =
-      [ ELet
-          ( "inc"
-          , EFun (PVar "x", EApply (EApply (EBinOp Plus, EVar "x"), EConst (CInt 1))) )
+      [ DExpr
+          (ELet
+             ( "inc"
+             , EFun (PVar "x", EApply (EApply (EBinOp Plus, EVar "x"), EConst (CInt 1)))
+             ))
       ]
     in
     check_types e |> run_infer
@@ -785,18 +801,20 @@ let%expect_test _ =
   let open Ast in
   let _ =
     let e =
-      [ ELetRec
-          ( "fac"
-          , EFun
-              ( PVar "n"
-              , EIfThenElse
-                  ( EApply (EApply (EBinOp Gt, EVar "n"), EConst (CInt 0))
-                  , EApply
-                      ( EApply (EBinOp Mult, EVar "n")
-                      , EApply
-                          ( EVar "fac"
-                          , EApply (EApply (EBinOp Minus, EVar "n"), EConst (CInt 1)) ) )
-                  , EConst (CInt 1) ) ) )
+      [ DExpr
+          (ELetRec
+             ( "fac"
+             , EFun
+                 ( PVar "n"
+                 , EIfThenElse
+                     ( EApply (EApply (EBinOp Gt, EVar "n"), EConst (CInt 0))
+                     , EApply
+                         ( EApply (EBinOp Mult, EVar "n")
+                         , EApply
+                             ( EVar "fac"
+                             , EApply (EApply (EBinOp Minus, EVar "n"), EConst (CInt 1))
+                             ) )
+                     , EConst (CInt 1) ) ) ))
       ]
     in
     check_types e |> run_infer
@@ -810,19 +828,21 @@ let%expect_test _ =
   let open Ast in
   let _ =
     let e =
-      [ ELetRecIn
-          ( "fac"
-          , EFun
-              ( PVar "n"
-              , EIfThenElse
-                  ( EApply (EApply (EBinOp Gt, EVar "n"), EConst (CInt 0))
-                  , EApply
-                      ( EApply (EBinOp Mult, EVar "n")
-                      , EApply
-                          ( EVar "fac"
-                          , EApply (EApply (EBinOp Minus, EVar "n"), EConst (CInt 1)) ) )
-                  , EConst (CInt 1) ) )
-          , EApply (EVar "fac", EConst (CInt 5)) )
+      [ DExpr
+          (ELetRecIn
+             ( "fac"
+             , EFun
+                 ( PVar "n"
+                 , EIfThenElse
+                     ( EApply (EApply (EBinOp Gt, EVar "n"), EConst (CInt 0))
+                     , EApply
+                         ( EApply (EBinOp Mult, EVar "n")
+                         , EApply
+                             ( EVar "fac"
+                             , EApply (EApply (EBinOp Minus, EVar "n"), EConst (CInt 1))
+                             ) )
+                     , EConst (CInt 1) ) )
+             , EApply (EVar "fac", EConst (CInt 5)) ))
       ]
     in
     check_types e |> run_infer
@@ -836,11 +856,12 @@ let%expect_test _ =
   let open Ast in
   let _ =
     let e =
-      [ EMatch
-          ( EConst (CBool true)
-          , [ PConst (CBool true), EConst (CInt 1)
-            ; PConst (CBool false), EConst (CInt 0)
-            ] )
+      [ DExpr
+          (EMatch
+             ( EConst (CBool true)
+             , [ PConst (CBool true), EConst (CInt 1)
+               ; PConst (CBool false), EConst (CInt 0)
+               ] ))
       ]
     in
     check_types e |> run_infer
@@ -854,8 +875,10 @@ let%expect_test _ =
   let open Ast in
   let _ =
     let e =
-      [ EList
-          (EConst (CInt 1), EList (EConst (CInt 2), EList (EConst (CInt 3), EConst CNil)))
+      [ DExpr
+          (EList
+             ( EConst (CInt 1)
+             , EList (EConst (CInt 2), EList (EConst (CInt 3), EConst CNil)) ))
       ]
     in
     check_types e |> run_infer
@@ -867,12 +890,13 @@ let%expect_test _ =
   let open Ast in
   let _ =
     let e =
-      [ EList
-          ( ETuple [ EConst (CInt 5); EConst (CString "ocaml") ]
-          , EList
-              ( ETuple [ EConst (CInt 2); EConst (CString "is") ]
-              , EList (ETuple [ EConst (CInt 4); EConst (CString "cool") ], EConst CNil)
-              ) )
+      [ DExpr
+          (EList
+             ( ETuple [ EConst (CInt 5); EConst (CString "ocaml") ]
+             , EList
+                 ( ETuple [ EConst (CInt 2); EConst (CString "is") ]
+                 , EList (ETuple [ EConst (CInt 4); EConst (CString "cool") ], EConst CNil)
+                 ) ))
       ]
     in
     check_types e |> run_infer
@@ -886,11 +910,12 @@ let%expect_test _ =
   let open Ast in
   let _ =
     let e =
-      [ ETuple
-          [ EConst (CInt 2)
-          ; EConst (CString "kakadu")
-          ; ETuple [ EConst (CInt 42); EConst (CBool true) ]
-          ]
+      [ DExpr
+          (ETuple
+             [ EConst (CInt 2)
+             ; EConst (CString "kakadu")
+             ; ETuple [ EConst (CInt 42); EConst (CBool true) ]
+             ])
       ]
     in
     check_types e |> run_infer
@@ -903,7 +928,9 @@ let%expect_test _ =
 let%expect_test _ =
   let open Ast in
   let _ =
-    let e = [ ELetIn ("x", EConst (CInt 5), EPolyVariant ("`Some", [ EVar "x" ])) ] in
+    let e =
+      [ DExpr (ELetIn ("x", EConst (CInt 5), EPolyVariant ("`Some", [ EVar "x" ]))) ]
+    in
     check_types e |> run_infer
   in
   [%expect {| [> `Some of int ] |}]
@@ -913,13 +940,14 @@ let%expect_test _ =
   let open Ast in
   let _ =
     let e =
-      [ EFun
-          ( PVar "x"
-          , EMatch
-              ( EVar "x"
-              , [ PPolyVariant ("`Some", [ PVar "x" ]), EVar "x"
-                ; PPolyVariant ("`None", []), EConst (CInt 0)
-                ] ) )
+      [ DExpr
+          (EFun
+             ( PVar "x"
+             , EMatch
+                 ( EVar "x"
+                 , [ PPolyVariant ("`Some", [ PVar "x" ]), EVar "x"
+                   ; PPolyVariant ("`None", []), EConst (CInt 0)
+                   ] ) ))
       ]
     in
     check_types e |> run_infer
@@ -931,15 +959,16 @@ let%expect_test _ =
   let open Ast in
   let _ =
     let e =
-      [ ELet
-          ( "test"
-          , EFun
-              ( PVar "x"
-              , EMatch
-                  ( EVar "x"
-                  , [ PPolyVariant ("`Some", [ PVar "x" ]), EVar "x"
-                    ; PPolyVariant ("`None", []), EConst (CInt 0)
-                    ] ) ) )
+      [ DExpr
+          (ELet
+             ( "test"
+             , EFun
+                 ( PVar "x"
+                 , EMatch
+                     ( EVar "x"
+                     , [ PPolyVariant ("`Some", [ PVar "x" ]), EVar "x"
+                       ; PPolyVariant ("`None", []), EConst (CInt 0)
+                       ] ) ) ))
       ]
     in
     check_types e |> run_infer
@@ -951,13 +980,15 @@ let%expect_test _ =
   let open Ast in
   let _ =
     let e =
-      [ EList
-          ( EPolyVariant ("`Excelent", [ EConst (CInt 5) ])
-          , EList
-              ( EPolyVariant ("`Good", [ EConst (CInt 4) ])
-              , EList
-                  ( EPolyVariant ("`NotBad", [ EConst (CInt 3) ])
-                  , EList (EPolyVariant ("`Bad", [ EConst (CInt 2) ]), EConst CNil) ) ) )
+      [ DExpr
+          (EList
+             ( EPolyVariant ("`Excelent", [ EConst (CInt 5) ])
+             , EList
+                 ( EPolyVariant ("`Good", [ EConst (CInt 4) ])
+                 , EList
+                     ( EPolyVariant ("`NotBad", [ EConst (CInt 3) ])
+                     , EList (EPolyVariant ("`Bad", [ EConst (CInt 2) ]), EConst CNil) )
+                 ) ))
       ]
     in
     check_types e |> run_infer
@@ -969,12 +1000,13 @@ let%expect_test _ =
   let open Ast in
   let _ =
     let e =
-      [ EFun
-          ( PVar "x"
-          , EIfThenElse
-              ( EApply (EApply (EBinOp Eq, EVar "x"), EConst (CInt 10))
-              , EPolyVariant ("`Some", [ EVar "x" ])
-              , EPolyVariant ("`None", []) ) )
+      [ DExpr
+          (EFun
+             ( PVar "x"
+             , EIfThenElse
+                 ( EApply (EApply (EBinOp Eq, EVar "x"), EConst (CInt 10))
+                 , EPolyVariant ("`Some", [ EVar "x" ])
+                 , EPolyVariant ("`None", []) ) ))
       ]
     in
     check_types e |> run_infer
@@ -986,14 +1018,15 @@ let%expect_test _ =
   let open Ast in
   let _ =
     let e =
-      [ EFun
-          ( PVar "x"
-          , EMatch
-              ( EVar "x"
-              , [ PConst (CInt 0), EPolyVariant ("`None", [])
-                ; PConst (CInt 1), EPolyVariant ("`None", [])
-                ; PConst (CInt 2), EPolyVariant ("`Some", [ EVar "x" ])
-                ] ) )
+      [ DExpr
+          (EFun
+             ( PVar "x"
+             , EMatch
+                 ( EVar "x"
+                 , [ PConst (CInt 0), EPolyVariant ("`None", [])
+                   ; PConst (CInt 1), EPolyVariant ("`None", [])
+                   ; PConst (CInt 2), EPolyVariant ("`Some", [ EVar "x" ])
+                   ] ) ))
       ]
     in
     check_types e |> run_infer
@@ -1007,18 +1040,19 @@ let%expect_test _ =
   let open Ast in
   let _ =
     let e =
-      [ ELetRec
-          ( "list_sum"
-          , EFun
-              ( PVar "list"
-              , EMatch
-                  ( EVar "list"
-                  , [ PConst CNil, EConst (CInt 0)
-                    ; ( PCons (PVar "hd", PVar "tl")
-                      , EApply
-                          ( EApply (EBinOp Plus, EVar "hd")
-                          , EApply (EVar "list_sum", EVar "tl") ) )
-                    ] ) ) )
+      [ DExpr
+          (ELetRec
+             ( "list_sum"
+             , EFun
+                 ( PVar "list"
+                 , EMatch
+                     ( EVar "list"
+                     , [ PConst CNil, EConst (CInt 0)
+                       ; ( PCons (PVar "hd", PVar "tl")
+                         , EApply
+                             ( EApply (EBinOp Plus, EVar "hd")
+                             , EApply (EVar "list_sum", EVar "tl") ) )
+                       ] ) ) ))
       ]
     in
     check_types e |> run_infer
@@ -1030,9 +1064,10 @@ let%expect_test _ =
   let open Ast in
   let _ =
     let e =
-      [ ELetRec
-          ( "always_true"
-          , EFun (PVar "a", EMatch (EVar "a", [ PWild, EConst (CBool true) ])) )
+      [ DExpr
+          (ELetRec
+             ( "always_true"
+             , EFun (PVar "a", EMatch (EVar "a", [ PWild, EConst (CBool true) ])) ))
       ]
     in
     check_types e |> run_infer
@@ -1044,10 +1079,12 @@ let%expect_test _ =
   let open Ast in
   let _ =
     let e =
-      [ ELet
-          ( "fst"
-          , EFun (PVar "a", EMatch (EVar "a", [ PTuple [ PVar "f"; PVar "s" ], EVar "f" ]))
-          )
+      [ DExpr
+          (ELet
+             ( "fst"
+             , EFun
+                 (PVar "a", EMatch (EVar "a", [ PTuple [ PVar "f"; PVar "s" ], EVar "f" ]))
+             ))
       ]
     in
     check_types e |> run_infer
@@ -1059,14 +1096,15 @@ let%expect_test _ =
   let open Ast in
   let _ =
     let e =
-      [ ELetRec
-          ( "list_is_empty"
-          , EFun
-              ( PVar "l"
-              , EMatch
-                  ( EVar "l"
-                  , [ PConst CNil, EConst (CBool true); PWild, EConst (CBool false) ] ) )
-          )
+      [ DExpr
+          (ELetRec
+             ( "list_is_empty"
+             , EFun
+                 ( PVar "l"
+                 , EMatch
+                     ( EVar "l"
+                     , [ PConst CNil, EConst (CBool true); PWild, EConst (CBool false) ]
+                     ) ) ))
       ]
     in
     check_types e |> run_infer
@@ -1080,21 +1118,23 @@ let%expect_test _ =
   let open Ast in
   let _ =
     let e =
-      [ ELetRec
-          ( "fac"
-          , EFun
-              ( PVar "n"
-              , EIfThenElse
-                  ( EApply (EApply (EBinOp Eq, EConst (CInt 1)), EVar "n")
-                  , EConst (CInt 1)
-                  , EApply
-                      ( EApply
-                          ( EBinOp Mult
-                          , EApply
-                              ( EVar "fac"
-                              , EApply (EApply (EBinOp Minus, EVar "n"), EConst (CInt 1))
-                              ) )
-                      , EVar "n" ) ) ) )
+      [ DExpr
+          (ELetRec
+             ( "fac"
+             , EFun
+                 ( PVar "n"
+                 , EIfThenElse
+                     ( EApply (EApply (EBinOp Eq, EConst (CInt 1)), EVar "n")
+                     , EConst (CInt 1)
+                     , EApply
+                         ( EApply
+                             ( EBinOp Mult
+                             , EApply
+                                 ( EVar "fac"
+                                 , EApply
+                                     (EApply (EBinOp Minus, EVar "n"), EConst (CInt 1)) )
+                             )
+                         , EVar "n" ) ) ) ))
       ]
     in
     check_types e |> run_infer
@@ -1106,25 +1146,27 @@ let%expect_test _ =
   let open Ast in
   let _ =
     let e =
-      [ ELetRec
-          ( "list_fold"
-          , EFun
-              ( PVar "list"
-              , EFun
-                  ( PVar "acc"
-                  , EFun
-                      ( PVar "f"
-                      , EMatch
-                          ( EVar "list"
-                          , [ PConst CNil, EVar "acc"
-                            ; ( PCons (PVar "head", PVar "tail")
-                              , EApply
-                                  ( EApply
-                                      ( EApply (EVar "list_fold", EVar "tail")
-                                      , EApply (EApply (EVar "f", EVar "acc"), EVar "head")
-                                      )
-                                  , EVar "f" ) )
-                            ] ) ) ) ) )
+      [ DExpr
+          (ELetRec
+             ( "list_fold"
+             , EFun
+                 ( PVar "list"
+                 , EFun
+                     ( PVar "acc"
+                     , EFun
+                         ( PVar "f"
+                         , EMatch
+                             ( EVar "list"
+                             , [ PConst CNil, EVar "acc"
+                               ; ( PCons (PVar "head", PVar "tail")
+                                 , EApply
+                                     ( EApply
+                                         ( EApply (EVar "list_fold", EVar "tail")
+                                         , EApply
+                                             (EApply (EVar "f", EVar "acc"), EVar "head")
+                                         )
+                                     , EVar "f" ) )
+                               ] ) ) ) ) ))
       ]
     in
     check_types e |> run_infer
@@ -1136,20 +1178,22 @@ let%expect_test _ =
   let open Ast in
   let _ =
     let e =
-      [ ELetRec
-          ( "map"
-          , EFun
-              ( PVar "list"
-              , EFun
-                  ( PVar "f"
-                  , EMatch
-                      ( EVar "list"
-                      , [ PConst CNil, EConst CNil
-                        ; ( PCons (PVar "head", PVar "tail")
-                          , EApply
-                              ( EApply (EBinOp ConsConcat, EApply (EVar "f", EVar "head"))
-                              , EApply (EApply (EVar "map", EVar "f"), EVar "tail") ) )
-                        ] ) ) ) )
+      [ DExpr
+          (ELetRec
+             ( "map"
+             , EFun
+                 ( PVar "list"
+                 , EFun
+                     ( PVar "f"
+                     , EMatch
+                         ( EVar "list"
+                         , [ PConst CNil, EConst CNil
+                           ; ( PCons (PVar "head", PVar "tail")
+                             , EApply
+                                 ( EApply
+                                     (EBinOp ConsConcat, EApply (EVar "f", EVar "head"))
+                                 , EApply (EApply (EVar "map", EVar "f"), EVar "tail") ) )
+                           ] ) ) ) ))
       ]
     in
     check_types e |> run_infer
@@ -1161,29 +1205,30 @@ let%expect_test _ =
   let open Ast in
   let _ =
     let e =
-      [ ELet
-          ( "list_rev"
-          , EFun
-              ( PVar "list"
-              , ELetRecIn
-                  ( "helper"
-                  , EFun
-                      ( PVar "acc"
-                      , EFun
-                          ( PVar "l"
-                          , EMatch
-                              ( EVar "l"
-                              , [ PConst CNil, EVar "acc"
-                                ; ( PCons (PVar "hd", PVar "tl")
-                                  , EApply
-                                      ( EApply
-                                          ( EVar "helper"
-                                          , EApply
-                                              ( EApply (EBinOp ConsConcat, EVar "hd")
-                                              , EVar "acc" ) )
-                                      , EVar "tl" ) )
-                                ] ) ) )
-                  , EApply (EApply (EVar "helper", EConst CNil), EVar "list") ) ) )
+      [ DExpr
+          (ELet
+             ( "list_rev"
+             , EFun
+                 ( PVar "list"
+                 , ELetRecIn
+                     ( "helper"
+                     , EFun
+                         ( PVar "acc"
+                         , EFun
+                             ( PVar "l"
+                             , EMatch
+                                 ( EVar "l"
+                                 , [ PConst CNil, EVar "acc"
+                                   ; ( PCons (PVar "hd", PVar "tl")
+                                     , EApply
+                                         ( EApply
+                                             ( EVar "helper"
+                                             , EApply
+                                                 ( EApply (EBinOp ConsConcat, EVar "hd")
+                                                 , EVar "acc" ) )
+                                         , EVar "tl" ) )
+                                   ] ) ) )
+                     , EApply (EApply (EVar "helper", EConst CNil), EVar "list") ) ) ))
       ]
     in
     check_types e |> run_infer
@@ -1195,39 +1240,40 @@ let%expect_test _ =
   let open Ast in
   let _ =
     let e =
-      [ ELet
-          ( "nth_opt"
-          , EFun
-              ( PVar "list"
-              , EFun
-                  ( PVar "number"
-                  , ELetRecIn
-                      ( "helper"
-                      , EFun
-                          ( PVar "l"
-                          , EFun
-                              ( PVar "n"
-                              , EMatch
-                                  ( EVar "l"
-                                  , [ PConst CNil, EPolyVariant ("`None", [])
-                                    ; ( PCons (PVar "hd", PVar "tl")
-                                      , EIfThenElse
-                                          ( EApply
-                                              ( EApply
-                                                  ( EBinOp Eq
-                                                  , EApply
-                                                      ( EApply (EBinOp Plus, EVar "n")
-                                                      , EConst (CInt 1) ) )
-                                              , EVar "number" )
-                                          , EPolyVariant ("`Some", [ EVar "hd" ])
-                                          , EApply
-                                              ( EApply (EVar "helper", EVar "tl")
-                                              , EApply
-                                                  ( EApply (EBinOp Plus, EVar "n")
-                                                  , EConst (CInt 1) ) ) ) )
-                                    ] ) ) )
-                      , EApply (EApply (EVar "helper", EVar "list"), EConst (CInt 0)) ) )
-              ) )
+      [ DExpr
+          (ELet
+             ( "nth_opt"
+             , EFun
+                 ( PVar "list"
+                 , EFun
+                     ( PVar "number"
+                     , ELetRecIn
+                         ( "helper"
+                         , EFun
+                             ( PVar "l"
+                             , EFun
+                                 ( PVar "n"
+                                 , EMatch
+                                     ( EVar "l"
+                                     , [ PConst CNil, EPolyVariant ("`None", [])
+                                       ; ( PCons (PVar "hd", PVar "tl")
+                                         , EIfThenElse
+                                             ( EApply
+                                                 ( EApply
+                                                     ( EBinOp Eq
+                                                     , EApply
+                                                         ( EApply (EBinOp Plus, EVar "n")
+                                                         , EConst (CInt 1) ) )
+                                                 , EVar "number" )
+                                             , EPolyVariant ("`Some", [ EVar "hd" ])
+                                             , EApply
+                                                 ( EApply (EVar "helper", EVar "tl")
+                                                 , EApply
+                                                     ( EApply (EBinOp Plus, EVar "n")
+                                                     , EConst (CInt 1) ) ) ) )
+                                       ] ) ) )
+                         , EApply (EApply (EVar "helper", EVar "list"), EConst (CInt 0))
+                         ) ) ) ))
       ]
     in
     check_types e |> run_infer
@@ -1239,26 +1285,27 @@ let%expect_test _ =
   let open Ast in
   let _ =
     let e =
-      [ ELet
-          ( "find_opt"
-          , EFun
-              ( PVar "f"
-              , EFun
-                  ( PVar "list"
-                  , ELetRecIn
-                      ( "helper"
-                      , EFun
-                          ( PVar "l"
-                          , EMatch
-                              ( EVar "l"
-                              , [ PConst CNil, EPolyVariant ("`None", [])
-                                ; ( PCons (PVar "hd", PVar "tl")
-                                  , EIfThenElse
-                                      ( EApply (EVar "f", EVar "hd")
-                                      , EPolyVariant ("`Some", [ EVar "hd" ])
-                                      , EApply (EVar "helper", EVar "tl") ) )
-                                ] ) )
-                      , EApply (EVar "helper", EVar "list") ) ) ) )
+      [ DExpr
+          (ELet
+             ( "find_opt"
+             , EFun
+                 ( PVar "f"
+                 , EFun
+                     ( PVar "list"
+                     , ELetRecIn
+                         ( "helper"
+                         , EFun
+                             ( PVar "l"
+                             , EMatch
+                                 ( EVar "l"
+                                 , [ PConst CNil, EPolyVariant ("`None", [])
+                                   ; ( PCons (PVar "hd", PVar "tl")
+                                     , EIfThenElse
+                                         ( EApply (EVar "f", EVar "hd")
+                                         , EPolyVariant ("`Some", [ EVar "hd" ])
+                                         , EApply (EVar "helper", EVar "tl") ) )
+                                   ] ) )
+                         , EApply (EVar "helper", EVar "list") ) ) ) ))
       ]
     in
     check_types e |> run_infer
