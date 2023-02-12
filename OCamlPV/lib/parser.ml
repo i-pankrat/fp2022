@@ -250,79 +250,6 @@ let pack =
 
 let ppattern = pack.pattern pack
 
-(** PVtype constructors *)
-
-let cpvlist a = TList a
-let cpvtuple l = TTuple l
-let cpvconst l = TTuple l
-let cpvtype id = TType id
-let cpvint = TInt
-let cpvbool = TBool
-let cpvstring = TString
-let cpvany id = TAny id
-let cnotype = TNoType
-
-(** Parsing PVtype*)
-let cpvlist v l =
-  let rec helper = function
-    | [] -> v
-    | _ :: tl -> cpvlist @@ helper tl
-  in
-  helper l
-;;
-
-let pparameter = (fun res -> Format.sprintf "'%s" res) <$> pstoken "'" *> psIdent
-let ppvint = lift (fun _ -> cpvint) (pstoken "int")
-let ppvbool = lift (fun _ -> cpvbool) (pstoken "bool")
-let ppvstring = lift (fun _ -> cpvstring) (pstoken "string")
-let ppvany = lift (fun any -> cpvany any) pparameter
-let ppvtype = lift (fun typ -> cpvtype typ) psIdent
-let ppvlist p = lift (fun l -> cpvlist l) (p <* many1 (pstoken "list"))
-let ppvlist p = lift2 (fun t l -> cpvlist t l) p (many1 (pstoken "list"))
-
-let ppvtuple p =
-  lift2 (fun f l -> cpvtuple (f :: l)) (p <* pstoken "*") (sep_by1 (pstoken "*") p)
-;;
-
-type pvdispatch =
-  { tvalue : pvdispatch -> pvtype t
-  ; tany : pvdispatch -> pvtype t
-  ; ttuple : pvdispatch -> pvtype t
-  ; tlist : pvdispatch -> pvtype t
-  ; pvtype : pvdispatch -> pvtype t
-  ; pv : pvdispatch -> pvtype t
-  }
-
-let pack =
-  let pv pack =
-    fix
-    @@ fun _ ->
-    choice
-      ~failure_msg:"Failed to parse type declaration"
-      [ pack.ttuple pack
-      ; pack.tlist pack
-      ; pack.tvalue pack
-      ; pack.tany pack
-      ; pack.pvtype pack
-      ]
-  in
-  let tvalue pack =
-    choice [ ppvint; ppvbool; ppvstring; pack.tany pack; pack.pvtype pack ]
-  in
-  let tlist pack =
-    fix @@ fun _ -> ppvlist @@ choice [ pparens @@ pack.ttuple pack; pack.tvalue pack ]
-  in
-  let ttuple pack =
-    fix
-    @@ fun self -> ppvtuple @@ choice [ pack.tlist pack; pparens self; pack.tvalue pack ]
-  in
-  let pvtype _ = ppvtype in
-  let tany _ = ppvany in
-  { tvalue; tany; ttuple; tlist; pvtype; pv }
-;;
-
-let ppvtype = pack.pv pack
-
 (** Expr constructors *)
 
 let econd i t e = EIfThenElse (i, t, e)
@@ -338,7 +265,6 @@ let ebinop op = EBinOp op
 let elist h t = EList (h, t)
 let etuple t = ETuple t
 let epolyvariant c args = EPolyVariant (c, args)
-let etype id par pvtyp = EType (id, par, pvtyp)
 
 (** Parse expr *)
 
@@ -362,7 +288,6 @@ type edispatch =
   ; elist : edispatch -> expr t
   ; etuple : edispatch -> expr t
   ; epv : edispatch -> expr t
-  ; etype : edispatch -> expr t
   ; expr : edispatch -> expr t
   }
 
@@ -430,28 +355,6 @@ let eletdecl pexpr =
        pargs
        (pstoken1 "=" *> pexpr)
        (pstoken1 "in" *> pexpr)
-;;
-
-let ptyp p =
-  empty
-  *> lift2
-       (fun constr typ -> constr, typ)
-       ppvconstructor
-       (option cnotype (pstoken "of" *> p))
-;;
-
-let pfsttyp p = pverticalbar @@ ptyp p <|> ptyp p
-let ptyp p = pverticalbar @@ ptyp p
-let ptyps p = pbrackets @@ lift2 (fun f l -> f :: l) (pfsttyp p) (many @@ ptyp p)
-let pparameters = many pparameter
-
-let ptype p =
-  pstoken "type"
-  *> lift3
-       (fun pars id pv_types -> etype id pars pv_types)
-       pparameters
-       (psIdent <* pstoken "=")
-       (ptyps p)
 ;;
 
 let chainl1 e op =
@@ -530,7 +433,6 @@ let pack =
       ~failure_msg:"Failed to parse expr"
       [ letsin pack
       ; lets pack
-      ; pack.etype pack
       ; pack.econdition pack
       ; pack.eapply pack
       ; pack.elist pack
@@ -628,7 +530,6 @@ let pack =
   in
   let etuple pack = fix @@ fun _ -> parse_tuple_parens (value_parsers pack) etuple in
   let epv pack = fix @@ fun _ -> pepv @@ value_parsers pack in
-  let etype _ = fix @@ fun _ -> ptype ppvtype in
   { evar
   ; econst
   ; econdition
@@ -643,7 +544,6 @@ let pack =
   ; elist
   ; etuple
   ; epv
-  ; etype
   ; expr
   }
 ;;
@@ -834,101 +734,6 @@ let%expect_test _ =
        [(PConst CNil); (PConst (CString "OCaml"));
          (PTuple [(PVar "a"); (PVar "b")])]
        )) |}]
-;;
-
-(** PVtype tests *)
-
-let%expect_test _ =
-  interprete_parse_result show_pvtype ppvtype "int";
-  [%expect {| TInt |}]
-;;
-
-let%expect_test _ =
-  interprete_parse_result show_pvtype ppvtype "string list";
-  [%expect {| (TList TString) |}]
-;;
-
-let%expect_test _ =
-  interprete_parse_result show_pvtype ppvtype "bool list list";
-  [%expect {| (TList (TList TBool)) |}]
-;;
-
-let%expect_test _ =
-  interprete_parse_result show_pvtype ppvtype "int * int";
-  [%expect {| (TTuple [TInt; TInt]) |}]
-;;
-
-let%expect_test _ =
-  interprete_parse_result show_pvtype ppvtype "int * string * bool";
-  [%expect {| (TTuple [TInt; TString; TBool]) |}]
-;;
-
-let%expect_test _ =
-  interprete_parse_result show_pvtype ppvtype "int * string list";
-  [%expect {| (TTuple [TInt; (TList TString)]) |}]
-;;
-
-let%expect_test _ =
-  interprete_parse_result show_pvtype ppvtype "(int * string) list";
-  [%expect {| (TList (TTuple [TInt; TString])) |}]
-;;
-
-let%expect_test _ =
-  interprete_parse_result
-    show_pvtype
-    ppvtype
-    "(fst_type * second_type list list) * (int * third_type) list";
-  [%expect
-    {|
-    (TTuple
-       [(TTuple [(TType "fst_type"); (TList (TList (TType "second_type")))]);
-         (TList (TTuple [TInt; (TType "third_type")]))]) |}]
-;;
-
-let%expect_test _ =
-  interprete_parse_result
-    show_pvtype
-    ppvtype
-    "env * (int list * bool) list * fst_type list * (int * int) list";
-  [%expect
-    {|
-    (TTuple
-       [(TType "env"); (TList (TTuple [(TList TInt); TBool]));
-         (TList (TType "fst_type")); (TList (TTuple [TInt; TInt]))]) |}]
-;;
-
-let%expect_test _ =
-  interprete_parse_result show_pvtype ppvtype "int list * bool";
-  [%expect {| (TTuple [(TList TInt); TBool]) |}]
-;;
-
-let%expect_test _ =
-  interprete_parse_result show_pvtype ppvtype "my_type";
-  [%expect {| (TType "my_type") |}]
-;;
-
-let%expect_test _ =
-  interprete_parse_result show_pvtype ppvtype "my_type list";
-  [%expect {| (TList (TType "my_type")) |}]
-;;
-
-let%expect_test _ =
-  interprete_parse_result show_pvtype ppvtype "'a";
-  [%expect {| (TAny "'a") |}]
-;;
-
-let%expect_test _ =
-  interprete_parse_result show_pvtype ppvtype "'a list";
-  [%expect {| (TList (TAny "'a")) |}]
-;;
-
-let%expect_test _ =
-  interprete_parse_result show_pvtype ppvtype "('a list * 'b list) list * int list";
-  [%expect
-    {|
-    (TTuple
-       [(TList (TTuple [(TList (TAny "'a")); (TList (TAny "'b"))])); (TList TInt)
-         ]) |}]
 ;;
 
 (** Expression tests *)
@@ -1127,62 +932,6 @@ let%expect_test _ =
     (EPolyVariant ("`Some",
        [(EList ((EVar "a"), (EList ((EVar "b"), (EConst CNil)))));
          (ETuple [(EVar "c"); (EVar "d")])]
-       )) |}]
-;;
-
-(** Test type declaration *)
-
-let%expect_test _ =
-  interprete_parse_result
-    show_expr
-    pexpr
-    "type figure = [ `Square of int | `Rectangle of int * int | `Circle of int]";
-  [%expect
-    {|
-    (EType ("figure", [],
-       [("`Square", TInt); ("`Rectangle", (TTuple [TInt; TInt]));
-         ("`Circle", TInt)]
-       )) |}]
-;;
-
-let%expect_test _ =
-  interprete_parse_result show_expr pexpr "type 'a option = [ `Some of 'a | `None ]";
-  [%expect
-    {|
-    (EType ("option", ["'a"], [("`Some", (TAny "'a")); ("`None", TNoType)])) |}]
-;;
-
-let%expect_test _ =
-  interprete_parse_result show_expr pexpr "type 'a option = [ `Some of 'a | `None ]";
-  [%expect
-    {|
-    (EType ("option", ["'a"], [("`Some", (TAny "'a")); ("`None", TNoType)])) |}]
-;;
-
-let%expect_test _ =
-  interprete_parse_result
-    show_expr
-    pexpr
-    "type 'a 'b 'c 'd 'e grade = [ `Excelent of 'a | `Good of 'b | `Ok of 'c | `NotBad \
-     of 'd | `Bad of 'e | `Cumpot ]";
-  [%expect
-    {|
-    (EType ("grade", ["'a"; "'b"; "'c"; "'d"; "'e"],
-       [("`Excelent", (TAny "'a")); ("`Good", (TAny "'b")); ("`Ok", (TAny "'c"));
-         ("`NotBad", (TAny "'d")); ("`Bad", (TAny "'e")); ("`Cumpot", TNoType)]
-       )) |}]
-;;
-
-let%expect_test _ =
-  interprete_parse_result
-    show_expr
-    pexpr
-    "type 'a 'b good_or_bad = [ `Yes of hello * message list | `No of 'a * 'b]";
-  [%expect
-    {|
-    (EType ("good_or_bad", ["'a"; "'b"],
-       [("`Yes", (TTuple [(TType "hello"); (TList (TType "message"))]));
-         ("`No", (TTuple [(TAny "'a"); (TAny "'b")]))]
        )) |}]
 ;;
 
