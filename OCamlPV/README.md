@@ -14,7 +14,7 @@ Features done:
 - Interpret
 - Add parsing of type declaration
 - Add polymorphic variants to parser, inferencer and interpter
-- Create unit and crum tests
+- Create unit and cram tests
 - Implement REPL
 
 Features not implemented:
