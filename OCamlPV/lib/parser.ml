@@ -338,7 +338,6 @@ let ebinop op = EBinOp op
 let elist h t = EList (h, t)
 let etuple t = ETuple t
 let epolyvariant c args = EPolyVariant (c, args)
-let etype id par pvtyp = EType (id, par, pvtyp)
 
 (** Parse expr *)
 
@@ -362,7 +361,6 @@ type edispatch =
   ; elist : edispatch -> expr t
   ; etuple : edispatch -> expr t
   ; epv : edispatch -> expr t
-  ; etype : edispatch -> expr t
   ; expr : edispatch -> expr t
   }
 
@@ -430,28 +428,6 @@ let eletdecl pexpr =
        pargs
        (pstoken1 "=" *> pexpr)
        (pstoken1 "in" *> pexpr)
-;;
-
-let ptyp p =
-  empty
-  *> lift2
-       (fun constr typ -> constr, typ)
-       ppvconstructor
-       (option cnotype (pstoken "of" *> p))
-;;
-
-let pfsttyp p = pverticalbar @@ ptyp p <|> ptyp p
-let ptyp p = pverticalbar @@ ptyp p
-let ptyps p = pbrackets @@ lift2 (fun f l -> f :: l) (pfsttyp p) (many @@ ptyp p)
-let pparameters = many pparameter
-
-let ptype p =
-  pstoken "type"
-  *> lift3
-       (fun pars id pv_types -> etype id pars pv_types)
-       pparameters
-       (psIdent <* pstoken "=")
-       (ptyps p)
 ;;
 
 let chainl1 e op =
@@ -530,7 +506,6 @@ let pack =
       ~failure_msg:"Failed to parse expr"
       [ letsin pack
       ; lets pack
-      ; pack.etype pack
       ; pack.econdition pack
       ; pack.eapply pack
       ; pack.elist pack
@@ -628,7 +603,6 @@ let pack =
   in
   let etuple pack = fix @@ fun _ -> parse_tuple_parens (value_parsers pack) etuple in
   let epv pack = fix @@ fun _ -> pepv @@ value_parsers pack in
-  let etype _ = fix @@ fun _ -> ptype ppvtype in
   { evar
   ; econst
   ; econdition
@@ -643,13 +617,44 @@ let pack =
   ; elist
   ; etuple
   ; epv
-  ; etype
   ; expr
   }
 ;;
 
 let pexpr = pack.expr pack
-let pstatements = sep_by (pstoken ";;") pexpr
+
+(** Parse type type expresstion *)
+
+let dtype id params pvs = DType (id, params, pvs)
+
+let ptyp p =
+  empty
+  *> lift2
+       (fun constr typ -> constr, typ)
+       ppvconstructor
+       (option cnotype (pstoken "of" *> p))
+;;
+
+let pfsttyp p = pverticalbar @@ ptyp p <|> ptyp p
+let ptyp p = pverticalbar @@ ptyp p
+let ptyps p = pbrackets @@ lift2 (fun f l -> f :: l) (pfsttyp p) (many @@ ptyp p)
+let pparameters = many pparameter
+
+let ptype p =
+  pstoken "type"
+  *> lift3
+       (fun pars id pv_types -> dtype id pars pv_types)
+       pparameters
+       (psIdent <* pstoken "=")
+       (ptyps p)
+;;
+
+(** Parse declaration *)
+
+let pdtype = ptype ppvtype
+let pdexpr = pexpr >>= fun expr -> return (DExpr expr)
+let pdeclaration = pdexpr <|> pdtype
+let pstatements = sep_by (pstoken ";;") pdeclaration
 let parse program = parse_str pstatements (String.strip program)
 
 (** Parser tests *)
@@ -1134,40 +1139,46 @@ let%expect_test _ =
 
 let%expect_test _ =
   interprete_parse_result
-    show_expr
-    pexpr
+    show_declaration
+    pdtype
     "type figure = [ `Square of int | `Rectangle of int * int | `Circle of int]";
   [%expect
     {|
-    (EType ("figure", [],
+    (DType ("figure", [],
        [("`Square", TInt); ("`Rectangle", (TTuple [TInt; TInt]));
          ("`Circle", TInt)]
        )) |}]
 ;;
 
 let%expect_test _ =
-  interprete_parse_result show_expr pexpr "type 'a option = [ `Some of 'a | `None ]";
+  interprete_parse_result
+    show_declaration
+    pdtype
+    "type 'a option = [ `Some of 'a | `None ]";
   [%expect
     {|
-    (EType ("option", ["'a"], [("`Some", (TAny "'a")); ("`None", TNoType)])) |}]
-;;
-
-let%expect_test _ =
-  interprete_parse_result show_expr pexpr "type 'a option = [ `Some of 'a | `None ]";
-  [%expect
-    {|
-    (EType ("option", ["'a"], [("`Some", (TAny "'a")); ("`None", TNoType)])) |}]
+    (DType ("option", ["'a"], [("`Some", (TAny "'a")); ("`None", TNoType)])) |}]
 ;;
 
 let%expect_test _ =
   interprete_parse_result
-    show_expr
-    pexpr
+    show_declaration
+    pdtype
+    "type 'a option = [ `Some of 'a | `None ]";
+  [%expect
+    {|
+    (DType ("option", ["'a"], [("`Some", (TAny "'a")); ("`None", TNoType)])) |}]
+;;
+
+let%expect_test _ =
+  interprete_parse_result
+    show_declaration
+    pdtype
     "type 'a 'b 'c 'd 'e grade = [ `Excelent of 'a | `Good of 'b | `Ok of 'c | `NotBad \
      of 'd | `Bad of 'e | `Cumpot ]";
   [%expect
     {|
-    (EType ("grade", ["'a"; "'b"; "'c"; "'d"; "'e"],
+    (DType ("grade", ["'a"; "'b"; "'c"; "'d"; "'e"],
        [("`Excelent", (TAny "'a")); ("`Good", (TAny "'b")); ("`Ok", (TAny "'c"));
          ("`NotBad", (TAny "'d")); ("`Bad", (TAny "'e")); ("`Cumpot", TNoType)]
        )) |}]
@@ -1175,12 +1186,12 @@ let%expect_test _ =
 
 let%expect_test _ =
   interprete_parse_result
-    show_expr
-    pexpr
+    show_declaration
+    pdtype
     "type 'a 'b good_or_bad = [ `Yes of hello * message list | `No of 'a * 'b]";
   [%expect
     {|
-    (EType ("good_or_bad", ["'a"; "'b"],
+    (DType ("good_or_bad", ["'a"; "'b"],
        [("`Yes", (TTuple [(TType "hello"); (TList (TType "message"))]));
          ("`No", (TTuple [(TAny "'a"); (TAny "'b")]))]
        )) |}]
@@ -1362,34 +1373,38 @@ let%expect_test _ =
      let list = map (fun x -> x + x) [1; 2; 3]";
   [%expect
     {|
-    [(ELetRec ("map",
-        (EFun ((PVar "f"),
-           (EFun ((PVar "list"),
-              (EMatch ((EVar "list"),
-                 [((PConst CNil), (EConst CNil));
-                   ((PCons ((PVar "h"), (PVar "t"))),
-                    (EApply (
-                       (EApply ((EBinOp ConsConcat),
-                          (EApply ((EVar "f"), (EVar "h"))))),
-                       (EApply ((EApply ((EVar "map"), (EVar "f"))), (EVar "t")))
-                       )))
-                   ]
+    [(DExpr
+        (ELetRec ("map",
+           (EFun ((PVar "f"),
+              (EFun ((PVar "list"),
+                 (EMatch ((EVar "list"),
+                    [((PConst CNil), (EConst CNil));
+                      ((PCons ((PVar "h"), (PVar "t"))),
+                       (EApply (
+                          (EApply ((EBinOp ConsConcat),
+                             (EApply ((EVar "f"), (EVar "h"))))),
+                          (EApply ((EApply ((EVar "map"), (EVar "f"))),
+                             (EVar "t")))
+                          )))
+                      ]
+                    ))
                  ))
               ))
-           ))
-        ));
-      (ELet ("list",
-         (EApply (
-            (EApply ((EVar "map"),
-               (EFun ((PVar "x"),
-                  (EApply ((EApply ((EBinOp Plus), (EVar "x"))), (EVar "x")))))
-               )),
-            (EList ((EConst (CInt 1)),
-               (EList ((EConst (CInt 2)),
-                  (EList ((EConst (CInt 3)), (EConst CNil)))))
+           )));
+      (DExpr
+         (ELet ("list",
+            (EApply (
+               (EApply ((EVar "map"),
+                  (EFun ((PVar "x"),
+                     (EApply ((EApply ((EBinOp Plus), (EVar "x"))), (EVar "x")))
+                     ))
+                  )),
+               (EList ((EConst (CInt 1)),
+                  (EList ((EConst (CInt 2)),
+                     (EList ((EConst (CInt 3)), (EConst CNil)))))
+                  ))
                ))
-            ))
-         ))
+            )))
       ] |}]
 ;;
 
@@ -1409,51 +1424,55 @@ let%expect_test _ =
     \   let res = nth_opt [1; 2; 3; 4; 5]";
   [%expect
     {|
-    [(ELet ("nth_opt",
-        (EFun ((PVar "list"),
-           (EFun ((PVar "number"),
-              (ELetRecIn ("helper",
-                 (EFun ((PVar "l"),
-                    (EFun ((PVar "n"),
-                       (EMatch ((EVar "l"),
-                          [((PConst CNil), (EPolyVariant ("`None", [])));
-                            ((PCons ((PVar "hd"), (PVar "tl"))),
-                             (EIfThenElse (
-                                (EApply (
-                                   (EApply ((EBinOp Eq),
+    [(DExpr
+        (ELet ("nth_opt",
+           (EFun ((PVar "list"),
+              (EFun ((PVar "number"),
+                 (ELetRecIn ("helper",
+                    (EFun ((PVar "l"),
+                       (EFun ((PVar "n"),
+                          (EMatch ((EVar "l"),
+                             [((PConst CNil), (EPolyVariant ("`None", [])));
+                               ((PCons ((PVar "hd"), (PVar "tl"))),
+                                (EIfThenElse (
+                                   (EApply (
+                                      (EApply ((EBinOp Eq),
+                                         (EApply (
+                                            (EApply ((EBinOp Plus), (EVar "n"))),
+                                            (EConst (CInt 1))))
+                                         )),
+                                      (EVar "number"))),
+                                   (EPolyVariant ("`Some", [(EVar "hd")])),
+                                   (EApply (
+                                      (EApply ((EVar "helper"), (EVar "tl"))),
                                       (EApply (
                                          (EApply ((EBinOp Plus), (EVar "n"))),
                                          (EConst (CInt 1))))
-                                      )),
-                                   (EVar "number"))),
-                                (EPolyVariant ("`Some", [(EVar "hd")])),
-                                (EApply ((EApply ((EVar "helper"), (EVar "tl"))),
-                                   (EApply ((EApply ((EBinOp Plus), (EVar "n"))),
-                                      (EConst (CInt 1))))
-                                   ))
-                                )))
-                            ]
+                                      ))
+                                   )))
+                               ]
+                             ))
                           ))
-                       ))
-                    )),
-                 (EApply ((EApply ((EVar "helper"), (EVar "list"))),
-                    (EConst (CInt 0))))
+                       )),
+                    (EApply ((EApply ((EVar "helper"), (EVar "list"))),
+                       (EConst (CInt 0))))
+                    ))
                  ))
               ))
-           ))
-        ));
-      (ELet ("res",
-         (EApply ((EVar "nth_opt"),
-            (EList ((EConst (CInt 1)),
-               (EList ((EConst (CInt 2)),
-                  (EList ((EConst (CInt 3)),
-                     (EList ((EConst (CInt 4)),
-                        (EList ((EConst (CInt 5)), (EConst CNil)))))
+           )));
+      (DExpr
+         (ELet ("res",
+            (EApply ((EVar "nth_opt"),
+               (EList ((EConst (CInt 1)),
+                  (EList ((EConst (CInt 2)),
+                     (EList ((EConst (CInt 3)),
+                        (EList ((EConst (CInt 4)),
+                           (EList ((EConst (CInt 5)), (EConst CNil)))))
+                        ))
                      ))
                   ))
                ))
-            ))
-         ))
+            )))
       ] |}]
 ;;
 
@@ -1469,17 +1488,18 @@ let%expect_test _ =
     \      | `Some x -> `Ok x";
   [%expect
     {|
-    [(ELet ("transform_res",
-        (EFun ((PVar "res"),
-           (EMatch ((EVar "res"),
-              [((PPolyVariant ("`None", [])),
-                (EPolyVariant ("`Error",
-                   [(EConst (CString "Failed to get the result"))])));
-                ((PPolyVariant ("`Some", [(PVar "x")])),
-                 (EPolyVariant ("`Ok", [(EVar "x")])))
-                ]
+    [(DExpr
+        (ELet ("transform_res",
+           (EFun ((PVar "res"),
+              (EMatch ((EVar "res"),
+                 [((PPolyVariant ("`None", [])),
+                   (EPolyVariant ("`Error",
+                      [(EConst (CString "Failed to get the result"))])));
+                   ((PPolyVariant ("`Some", [(PVar "x")])),
+                    (EPolyVariant ("`Ok", [(EVar "x")])))
+                   ]
+                 ))
               ))
-           ))
-        ))
+           )))
       ] |}]
 ;;
