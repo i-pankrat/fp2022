@@ -20,6 +20,7 @@ type ierror =
   | `UnsupportedOperation
   | `PatternMismatch
   | `EmptyInput
+  | `NotImplemented of string
   | `Unreachable
   ]
 
@@ -32,6 +33,7 @@ let pp_ierror ppf : ierror -> unit =
   | `UnsupportedOperation -> fprintf ppf "Runtime error: unsupported operation"
   | `PatternMismatch -> fprintf ppf "Runtime error: pattern mismatch"
   | `EmptyInput -> fprintf ppf "Runtime error: empty input to interpret"
+  | `NotImplemented s -> fprintf ppf "Runtime error: %s is not implemented" s
   | `Unreachable ->
     fprintf
       ppf
@@ -278,6 +280,7 @@ end = struct
     | EPolyVariant (id, exprs) ->
       let* vls = eval_list exprs in
       return (cvpolyvariant id vls)
+    | EType _ -> fail (`NotImplemented "type")
   ;;
 
   let run_expr env expr : (environment * value, ierror) t =

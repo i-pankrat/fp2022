@@ -11,6 +11,7 @@ type error =
   | `Unification_failed of ty * ty
   | `Empty_pattern
   | `Empty_input
+  | `Not_implemented of string
   ]
 
 let pp_error ppf : error -> _ = function
@@ -26,6 +27,7 @@ let pp_error ppf : error -> _ = function
       r
   | `Empty_pattern -> Format.fprintf ppf "Typechecker error: empty pattern"
   | `Empty_input -> Format.fprintf ppf "Typechecker error: empty pattern"
+  | `Not_implemented s -> Format.fprintf ppf "Typechecker error: %s is not implemented" s
 ;;
 
 module R : sig
@@ -551,6 +553,7 @@ let infer =
       in
       let* fv = fresh in
       return (s, moretags_typ fv [ constructor, t ])
+    | EType (_, _, _) -> fail (`Not_implemented "type")
   in
   helper
 ;;

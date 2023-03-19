@@ -40,6 +40,18 @@ type pattern =
           represents the number of arguments which contructor takes*)
 [@@deriving eq, show { with_path = false }]
 
+(** Show the type of constructors *)
+and pvtype =
+  | TTuple of pvtype list (** Represents tuple type: int * int *)
+  | TList of pvtype (** Represents list type: int list *)
+  | TType of id (** Represents declared type: my_type *)
+  | TAny of id (** Represents parameter at type declaration *)
+  | TInt (** Represents int type *)
+  | TString (** Represents string type *)
+  | TBool (** Represents boolean type *)
+  | TNoType (** Represents that declared constructor has no arguments *)
+[@@deriving show { with_path = false }]
+
 (** Represents parameters at type declaration: type 'a 'b my_typ = ...*)
 and parameters = id list
 
@@ -63,6 +75,9 @@ and expr =
   | ETuple of expr list (* Represents tuple: [expr; expr; expr] = (expr, expr, expr) *)
   | EPolyVariant of id * expr list
       (** Polymorphic variants, where id represents constructor and expr -- arguments *)
+  | EType of id * parameters * (id * pvtype) list
+      (** Represent typ declaration: type parameters id = (id * pvtype) list.
+          It is possible to declare only polymorphic variants. *)
 [@@deriving show { with_path = false }]
 
 (** Represents the sequence of expr *)
